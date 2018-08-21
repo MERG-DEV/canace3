@@ -1,5 +1,5 @@
     TITLE   "Source for CAN accessory encoder using CBUS"
-; filename ACE3_t.asm   start 10/05/09
+; filename CANACE3_v2d.asm    18/05/12
 
 ; A control panel encoder for the FLiM model 
 ; Scans 128 toggles or 64 dual PBs, selected by a jumper
@@ -85,6 +85,19 @@
 ; rev s Correction so responds to RTR in SLiM mode
 ; rev t Correction to putNN for EEPROM write 10/05/11
 
+;Rev 102_a  First version wrt CBUS Developers Guide
+;     Add code to support 0x11 (RQMN)
+;     Add code to return 8th parameter by index - Flags
+;     Ignore extended frames in packet receive routine
+; Rev 102b-e various fault find builds
+; Rev 102f  add test for extended fram in receive routine
+; rev 102g  remove extended fram test and add new code in CAN initialisation
+; rev 102h  remove degging code
+
+; rev v2a first release build
+; rev v2b Change response to QNN to OPC_PNN
+; Rev v2c Add check fo zero parameter index and correct error code
+; Rev v2d Change parameters to new format
 
 ; End of comments for ACE3
 
@@ -158,6 +171,7 @@
   LIST  P=18F2480,r=hex,N=75,C=120,T=ON
 
   include   "p18f2480.inc"
+  include   "cbuslib/constants.inc"
   
   ;definitions  Change these to suit hardware.
   
@@ -168,17 +182,27 @@ M_PORT  equ  PORTA
 M_BIT equ  5    ;mode toggle or PB
 S_BIT equ 4
 Modstat equ 1   ;address in EEPROM
-Man_no  equ .165  ;manufacturer number
-Ver_no  equ "T" ;for now
-ACE3_ID equ 4   ; id of ACE3
-Para1 equ Man_no
-Para2 equ Ver_no
-Para3 equ ACE3_ID   
-Para4 equ 0   ;node descriptors (temp values)
-Para5 equ 0
-Para6 equ 1
-Para7 equ 0
-NV_NUM  equ 1   ;only one NV
+
+MAN_NO      equ MANU_MERG    ;manufacturer number
+MAJOR_VER   equ 2
+MINOR_VER   equ "D"
+MODULE_ID   equ MTYP_CANACE3 ; id to identify this type of module
+EVT_NUM     equ 0           ; Number of events
+EVperEVT    equ 0           ; Event variables per event
+NV_NUM      equ 1         ; Number of node variables
+NODEFLGS    equ PF_PRODUCER + PF_BOOT
+CPU_TYPE    equ P18F2480
+
+;Para1  equ Man_no
+;Para2  equ Ver_no
+;Para3  equ ACE3_ID   
+;Para4  equ 0   ;node descriptors (temp values)
+;Para5  equ 0
+;Para6  equ 1
+;Para7  equ .2
+;NV_NUM equ 1   ;only one NV
+
+OPC_PNN   equ 0xB6    ; response to QNN
 
 ; definitions used by bootloader
 
@@ -1032,6 +1056,7 @@ _CANSendBoot
 ;   start of program code
 
     ORG   0800h
+loadadr
     nop           ;for debug
     goto  setup
 
@@ -1039,16 +1064,35 @@ _CANSendBoot
     goto  hpint     ;high priority interrupt
 
     ORG   0810h     ;node type parameters
-node_ID db    Para1,Para2,Para3,Para4,Para5,Para6,Para7
-                ;change these 7 bytes as required
+myName  db  "ACE3   "
 
     ORG   0818h 
     goto  lpint     ;low priority interrupt
 
+    ORG   0820h
+
+nodeprm     db  MAN_NO, MINOR_VER, MODULE_ID, EVT_NUM, EVperEVT, NV_NUM 
+      db  MAJOR_VER,NODEFLGS,CPU_TYPE,PB_CAN    ; Main parameters
+            dw  RESET_VECT     ; Load address for module code above bootloader
+            dw  0           ; Top 2 bytes of 32 bit address not used
+sparprm     fill 0,prmcnt-$ ; Unused parameter space set to zero
+
+PRMCOUNT    equ sparprm-nodeprm ; Number of parameter bytes implemented
+
+             ORG 0838h
+
+prmcnt      dw  PRMCOUNT    ; Number of parameters implemented
+nodenam     dw  myName      ; Pointer to module type name
+            dw  0 ; Top 2 bytes of 32 bit address not used
+
+
+PRCKSUM     equ MAN_NO+MINOR_VER+MODULE_ID+EVT_NUM+EVperEVT+NV_NUM+MAJOR_VER+NODEFLGS+CPU_TYPE+PB_CAN+HIGH myName+LOW myName+HIGH loadadr+LOW loadadr+PRMCOUNT
+
+cksum       dw  PRCKSUM     ; Checksum of parameters
 
 ;*******************************************************************
 
-    ORG   0820h     ;start of program
+    ORG   0840h     ;start of program
 ; 
 ;
 ;   high priority interrupt. Used for CAN transmit error and enum response.
@@ -1138,8 +1182,9 @@ load  movf  POSTINC1,W
 ;   bra   setmode 
     movf  Rx0dlc,F
     bz    back        ;ignore zero length frames  
+;   btfss Rx0sidl,3     ;ignore extended frames
     bsf   Datmode,0     ;valid message frame
-    
+
 back  bcf   RXB0CON,RXFUL ;ready for next
   
 back1 clrf  PIR3      ;clear all interrupt flags
@@ -1199,12 +1244,6 @@ enum_2  dcfsnz  IDcount,F
 enum_3  movf  Roll,W
     iorwf INDF1,F
     bra   back
-
-    
-
-
-
-    
 
 
 ;**************************************************************
@@ -1424,7 +1463,19 @@ teach1  btfss Mode,1      ; only valid in SLiM mode
 readEV1 goto  readEV
 undo1 goto  undo
     
+name
+    btfss Datmode,2   ;only in setup mode
+    bra   main2
+    call  namesend
+    bra   main2
 
+doQnn
+    movf  NN_temph,w    ;respond if NN is not zero
+    addwf NN_templ,w
+    btfss STATUS,Z
+    call  whoami
+    bra   main2   
+    
                 ;main packet handling is here
     
 packet
@@ -1446,6 +1497,9 @@ packet
     movlw 0x73
     subwf Rx0d0,W
     bz    para1a
+    movlw 0x0d      ; QNN
+    subwf Rx0d0,W
+    bz    doQnn
     btfss Mode,1      ; FLiM mode?
     bra   main2
     movlw 0x42      ;set NN on 0x42
@@ -1454,6 +1508,9 @@ packet
     movlw 0x10      ;read manufacturer
     subwf Rx0d0,W
     bz    params1     ;read node parameters
+    movlw 0x11
+    subwf Rx0d0,w
+    bz    name      ;read module name
     movlw 0x53      ;FLiM learn mode
     subwf Rx0d0,W
     bz    fl_lrn1
@@ -1697,6 +1754,13 @@ setup clrf  INTCON      ;no interrupts yet
     movlw B'00100100'
     movwf RXB0CON     ;enable double buffer of RX0
     
+;new code for extended fame bug fix
+    movlb .15
+    movlw B'00100000'   ;reject extended frames
+    movwf RXB1CON
+    clrf  RXF0SIDL
+    clrf  RXF1SIDL
+    movlb 0       
 
     
 mskload lfsr  0,RXM0SIDH    ;Clear masks, point to start
@@ -1704,14 +1768,15 @@ mskloop clrf  POSTINC0
     movlw LOW RXM1EIDL+1    ;end of masks
     cpfseq  FSR0L
     bra   mskloop
-    movlb .15       ;block extended frames
-    bcf   RXF1SIDL,3    ;standard frames
-    bcf   RXF0SIDL,3    ;standard frames
-    bcf   RXB0CON,RXM1  ;frame type set by RXFnSIDL
-    bcf   RXB0CON,RXM0
-    bcf   RXB1CON,RXM1
-    bcf   RXB1CON,RXM0
-    movlb 0
+;old code   
+;   movlb .15       ;block extended frames
+;   bcf   RXF1SIDL,3    ;standard frames
+;   bcf   RXF0SIDL,3    ;standard frames
+;   bcf   RXB0CON,RXM1  ;frame type set by RXFnSIDL
+;   bcf   RXB0CON,RXM0
+;   bcf   RXB1CON,RXM1
+;   bcf   RXB1CON,RXM0
+;   movlb 0
   
     clrf  CANCON      ;out of CAN setup mode
     clrf  CCP1CON
@@ -1884,10 +1949,11 @@ tx1test btfsc TXB1CON,TXREQ ;test if clear to send
 tx1done movlb 0       ;bank 0
     return          ;successful send
 
-    
-sendTX  ;movff  NN_temph,Tx1d1
-    ;movff  NN_templ,Tx1d2
 
+sendTXNN
+    movff NN_temph,Tx1d1
+    movff NN_templ,Tx1d2
+sendTX
 sendTXa movf  Dlc,W       ;get data length
     movwf Tx1dlc
     movlw B'00001111'   ;clear old priority
@@ -2709,7 +2775,7 @@ not_NN  retlw 1
 parasend  
     movlw 0xEF
     movwf Tx1d0
-    movlw LOW node_ID
+    movlw LOW nodeprm
     movwf TBLPTRL
     movlw 8
     movwf TBLPTRH   ;relocated code
@@ -2769,29 +2835,117 @@ enum  clrf  Tx1con      ;CAN ID enumeration. Send RTR frame, start timer
     clrf  Tx1dlc      ;prevent more RTR frames
     return
 
+;**************************************************************************
+;   send module name - 7 bytes
+
+namesend  
+    movlw 0xE2
+    movwf Tx1d0
+    movlw LOW myName
+    movwf TBLPTRL
+    movlw HIGH myName
+    movwf TBLPTRH   ;relocated code
+    lfsr  FSR0,Tx1d1
+    movlw 7
+    movwf Count
+    bsf   EECON1,EEPGD
+    
+name1 tblrd*+
+    movff TABLAT,POSTINC0
+    decfsz  Count
+    bra   name1
+    bcf   EECON1,EEPGD  
+    movlw 8
+    movwf Dlc
+    call  sendTXa
+    return
+    
+
 ;**********************************************************
 
 ;   send individual parameter
 
-para1rd movlw 0x9B
+;   Index 0 sends no of parameters
+
+para1rd movf  Rx0d3,w
+    sublw 0
+    bz    numParams
+    movlw PRMCOUNT
+    movff Rx0d3, Temp
+    decf  Temp
+    cpfslt  Temp
+    bra   pidxerr
+    movlw 0x9B
     movwf Tx1d0
-    movlw LOW node_ID
+    movlw 7   ;FLAGS index in nodeprm
+    cpfseq  Temp
+    bra   notFlags      
+    call  getflags
+    movwf Tx1d4
+    bra   addflags
+notFlags    
+    movlw LOW nodeprm
     movwf TBLPTRL
-    movlw 8
+    movlw HIGH nodeprm
     movwf TBLPTRH   ;relocated code
+    clrf  TBLPTRU
     decf  Rx0d3,W
     addwf TBLPTRL
     bsf   EECON1,EEPGD
     tblrd*
     movff TABLAT,Tx1d4
-    bcf   EECON1,EEPGD
+addflags            
     movff Rx0d3,Tx1d3
     movlw 5
     movwf Dlc
-    movff NN_temph,Tx1d1
-    movff NN_templ,Tx1d2
     call  sendTX
     return  
+    
+numParams
+    movlw 0x9B
+    movwf Tx1d0
+    movlw PRMCOUNT
+    movwf Tx1d4
+    movff Rx0d3,Tx1d3
+    movlw 5
+    movwf Dlc
+    call  sendTXNN
+    return
+    
+pidxerr
+    movlw .10
+    call  errsub
+    return
+    
+getflags    ; create flags byte
+    movlw PF_PRODUCER
+    btfsc Mode,1
+    iorlw 4   ; set bit 2
+    movwf Temp
+    bsf   Temp,3    ;set bit 3, we are bootable
+    movf  Temp,w
+    return
+    
+    
+;**********************************************************
+
+; returns Node Number, Manufacturer Id, Module Id and Flags
+
+whoami
+    call  ldely   ;wait for other nodes
+    movlw OPC_PNN
+    movwf Tx1d0
+    movlw MAN_NO    ;Manufacturer Id
+    movwf Tx1d3
+    movlw MODULE_ID   ; Module Id
+    movwf Tx1d4
+    call  getflags
+    movwf Tx1d5
+    movlw 6
+    movwf Dlc
+    call  sendTXNN
+    return
+    
 
 ;**********************************************************************
 
