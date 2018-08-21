@@ -1,5 +1,5 @@
     TITLE   "Source for CAN accessory encoder using CBUS"
-; filename ACE3_s.asm   start 10/05/09
+; filename ACE3_t.asm   start 10/05/09
 
 ; A control panel encoder for the FLiM model 
 ; Scans 128 toggles or 64 dual PBs, selected by a jumper
@@ -83,6 +83,8 @@
 ;          Add FLiM mode test to packet routine
 ;          Remove FLiM mode tests from individual routines
 ; rev s Correction so responds to RTR in SLiM mode
+; rev t Correction to putNN for EEPROM write 10/05/11
+
 
 ; End of comments for ACE3
 
@@ -167,7 +169,7 @@ M_BIT equ  5    ;mode toggle or PB
 S_BIT equ 4
 Modstat equ 1   ;address in EEPROM
 Man_no  equ .165  ;manufacturer number
-Ver_no  equ "R"   ;for now
+Ver_no  equ "T" ;for now
 ACE3_ID equ 4   ; id of ACE3
 Para1 equ Man_no
 Para2 equ Ver_no
@@ -1914,6 +1916,7 @@ putNN movff Rx0d1,NN_temph
     bnz   notsame
     bra   same
 notsame movlw LOW NodeID    ;only reload table if NN is changed
+    movwf EEADR
     movf  Rx0d1,W
     call  eewrite
     incf  EEADR
