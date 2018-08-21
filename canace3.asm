@@ -1,5 +1,5 @@
     TITLE   "Source for CAN accessory encoder using CBUS"
-; filename ACE3_t.asm   start 10/05/09
+; filename ACE3_tc.asm    start 10/05/09
 
 ; A control panel encoder for the FLiM model 
 ; Scans 128 toggles or 64 dual PBs, selected by a jumper
@@ -84,7 +84,7 @@
 ;          Remove FLiM mode tests from individual routines
 ; rev s Correction so responds to RTR in SLiM mode
 ; rev t Correction to putNN for EEPROM write 10/05/11
-
+; rev tc  Add Start of Day for toggle inputs (Ray Sofio 12/12/11) 
 
 ; End of comments for ACE3
 
@@ -327,7 +327,8 @@ NV_NUM  equ 1   ;only one NV
   Mode      ;for FLim / Slim
   Mode1     ;mode. toggle or PB in FLiM
   Mode2     ;mode. toggle or PB in SLiM
-
+  Case
+  Temp2
           ;the above variables must be in access space (00 to 5F)
             
   Buffer      ;temp buffer in access bank for data  
@@ -1739,37 +1740,57 @@ mskloop clrf  POSTINC0
     movlw B'00100011'   ;B'00100011'Rx0 and RX1 interrupt and Tx error
               
     movwf PIE3
-
-    
-    
     
 no_load   call  modeload    ;get FLiM mode from EEPROM
-    clrf  Mode2
-    btfsc M_PORT,M_BIT  ;initialise SLiM mode for scan
-    bsf   Mode2,0
-  
-;********************************************
+      clrf  Mode2
+      btfsc M_PORT,M_BIT  ;initialise SLiM mode for scan
+      bsf   Mode2,0
 
-;   initialise buffer   
+;*************************************************************
+; get Node Status from EEPROM and set Case for Start of Day
 
-    call  buf_init  
-    
-
-  
-;********************************************** 
-
-    ;   test for setup mode
-    clrf  Mode
+    clrf  Case
     movlw Modstat     ;get setup status
     movwf EEADR
     call  eeread
     movwf Datmode
-    sublw 0       ;is SLiM mode
-    bnz   setid
-    bra   slimset     ;set up in SLiM mode
+    sublw 0     ;is it in SLiM mode?
+    bnz flim_case
+
+    movlw 0
+    subwf Mode2,w     ;all toggles
+    bz  case_1
+    bra initscan    ;all PBs
+
+flim_case movlw 0 
+    subwf Mode1,w     ;all toggles
+    bz  case_1
+    movlw 2 
+    subwf Mode1,w     ;half toggles
+    bz  case_2
+    movlw 3 
+    subwf Mode1,w     ;half toggles
+    bz  case_2
+    bra initscan    ;all PBs
+
+case_1    bsf Case,0
+    bra initscan
+
+case_2    bsf Case,1
+
+initscan  call  buf_init
+  
+;*************************************************************    
+;   test for setup mode
+
+    clrf  Mode
+    movf  Datmode,w
+    sublw 0
+    bnz setid
+    bra slimset     ;set up in SLiM mode
     
   
-setid bsf   Mode,1      ;flag FLiM
+setid   bsf Mode,1      ;flag FLiM
     call  newid_f     ;put ID into Tx1buf, TXB2 and ID number store
     
 seten_f   
@@ -2655,27 +2676,33 @@ snd_inx movlw 0xB0
     movwf Dlc
     bra   sndpkt6
 ;********************************************************************
+; initialise matrix buffer with Start of Day for toggle inputs
 
-; initialise matrix buffer
-
-buf_init clrf Ccount      ;column count
-    lfsr  FSR0,Buffer
+buf_init  clrf  Ccount      ;column count
+      lfsr  FSR0,Buffer
   
-inscan1 movlw B'00001111'
-    andwf Ccount,F
-    movf  Ccount,W
-    movwf PORTA     ;set columns
-    call  dely      ;let column settle
-    movf  Ccount,W
-    movff PORTC,PLUSW0  ;put row data
-    
-  
-inscan2 incf  Ccount
-    btfss Ccount,4    ;more than 15?
-    bra   inscan1     ;next column
-                ;finish scan  
+inscan1   movlw B'00001111'
+      andwf Ccount,F
+      movf  Ccount,W
+      movwf PORTA     ;set columns
+      call  dely      ;let column settle
+      movff PORTC,Temp2   ;put row data
+      movlw 0
+      subwf Case,w      ;all push-buttons
+      bz    row_save
 
-    return
+      comf  Temp2,f     ;invert all bits for all toggles
+      movlw B'00001111'   ;mask for lower nibble
+      btfsc Case,1      ;half toggles?
+      andwf Temp2,f     ;if so, zero out high nibble
+
+row_save  movff Temp2,POSTINC0  ;save to buffer and increment FSR0
+  
+inscan2   incf  Ccount
+      btfss Ccount,4    ;more than 15?
+      bra   inscan1     ;next column
+      
+      return
 
 ;***************************************************************
       
