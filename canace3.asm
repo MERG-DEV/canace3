@@ -100,6 +100,7 @@
 ; Rev v2d Change parameters to new format
 ; Rev v2e Self enum as separate subroutine. Added OpCodes 0x5D and 0x75. PB changes
 ; Rev v2f Fix bug in read parameters, add node number to response(RH)
+; Rev v2g Fix in r2a for Index increment (MB 03/03/16)
 ; End of comments for ACE3
 
 ; This is the bootloader section
@@ -186,7 +187,7 @@ Modstat equ 1   ;address in EEPROM
 
 MAN_NO      equ MANU_MERG    ;manufacturer number
 MAJOR_VER   equ 2
-MINOR_VER   equ "F"
+MINOR_VER   equ "G"
 MODULE_ID   equ MTYP_CANACE3 ; id to identify this type of module
 EVT_NUM     equ 0           ; Number of events
 EVperEVT    equ 0           ; Event variables per event
@@ -2716,7 +2717,7 @@ r2a   btfss Oldrow,7    ;get old EEPROM row data
     btfsc Mode1,0     ;on ony?
     addlw 2
     movwf Index   ;moves index
-    
+    incf  Index
     bra   sendpkt
 
 scan2a  goto  scan2
