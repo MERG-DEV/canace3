@@ -1,5 +1,5 @@
     TITLE   "Source for CAN accessory encoder using CBUS"
-; filename CANACE3_v2e.asm    19/08/12
+; filename CANACE3_v2f.asm    19/08/12
 
 ; A control panel encoder for the FLiM model 
 ; Scans 128 toggles or 64 dual PBs, selected by a jumper
@@ -99,6 +99,7 @@
 ; Rev v2c Add check fo zero parameter index and correct error code
 ; Rev v2d Change parameters to new format
 ; Rev v2e Self enum as separate subroutine. Added OpCodes 0x5D and 0x75. PB changes
+; Rev v2f Fix bug in read parameters, add node number to response(RH)
 ; End of comments for ACE3
 
 ; This is the bootloader section
@@ -185,7 +186,7 @@ Modstat equ 1   ;address in EEPROM
 
 MAN_NO      equ MANU_MERG    ;manufacturer number
 MAJOR_VER   equ 2
-MINOR_VER   equ "E"
+MINOR_VER   equ "F"
 MODULE_ID   equ MTYP_CANACE3 ; id to identify this type of module
 EVT_NUM     equ 0           ; Number of events
 EVperEVT    equ 0           ; Event variables per event
@@ -2870,7 +2871,7 @@ addflags
     movff Rx0d3,Tx1d3
     movlw 5
     movwf Dlc
-    call  sendTX
+    call  sendTXNN
     return  
     
 numParams
