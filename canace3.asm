@@ -192,6 +192,14 @@ OFINIT    equ 0      ;First scan after init
   CONFIG  WRTC = OFF,WRTD = OFF, EBTR0 = OFF, EBTR1 = OFF, EBTRB = OFF
 
 ;********************************************************************************
+#define HIGH_INT_VECT 0x0808  ;HP interrupt vector redirect. Change if target is different
+#define LOW_INT_VECT  0x0818  ;LP interrupt vector redirect. Change if target is different.
+#define RESET_VECT  0x0800  ;start of target
+#define TYPE_PARAM  0x0810
+#define NODE_PARAM  0x0820
+#define NUM_PARAM   24
+#define META_PARAM  NODE_PARAM + NUM_PARAM
+
 ;*******************************************************************
   include   "cbuslib/boot_loader.inc"
 ;****************************************************************
@@ -375,21 +383,21 @@ SS_STATE  equ 0      ;Bit set if switch is ON
 ;
 ;   start of program code
 
-    ORG   0800h
+    ORG   RESET_VECT
 loadadr
     nop           ;for debug
     goto  setup
 
-    ORG   0808h
+    ORG   HIGH_INT_VECT
     goto  hpint     ;high priority interrupt
 
-    ORG   0810h     ;node type parameters
+    ORG   TYPE_PARAM     ;node type parameters
 myName  db  "ACE3C  "     ;module name (7 characters)
 
-    ORG   0818h 
+    ORG   LOW_INT_VECT 
     goto  lpint     ;low priority interrupt
 
-    ORG   0820h     ;Main parameters
+    ORG   NODE_PARAM     ;Main parameters
 nodeprm db  MAN_NO, MINOR_VER ;1-2
     db  MODULE_ID, EVT_NUM  ;3-4
     db  EVperEVT, NV_NUM  ;5-6
@@ -404,7 +412,7 @@ sparprm     fill 0,prmcnt-$ ; Unused parameter space set to zero
 
 PRMCOUNT    equ sparprm-nodeprm ; Number of parameter bytes implemented
 
-             ORG 0838h
+             ORG META_PARAM
 
 prmcnt      dw  PRMCOUNT    ; Number of parameters implemented
 nodenam     dw  myName      ; Pointer to module type name
@@ -417,7 +425,6 @@ cksum       dw  PRCKSUM     ; Checksum of parameters
 
 ;*******************************************************************
 
-    ORG   0840h     ;start of program
 ; 
 ;
 ;   high priority interrupt. Used for CAN receive and transmit error.
