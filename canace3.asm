@@ -1,11 +1,5 @@
     TITLE   "Source for CAN control panel encoder using CBUS"
 
-MAJOR_VER   equ .3    ;Firmware major version (numeric)
-MINOR_VER   equ "a"   ;Firmware minor version (alpha)
-BETA_VER  equ .0    ;Firmware beta version (numeric, 0 = Release)
-J5_SHORT  equ 0   ;Load short events in default flash table if J5 in upper position
-AUTOID    equ 0   ;Include automatic CAN ID enumeration (this may cause problems with CANCAN)
-
 ;      Date Rev   By  Notes
 ; 16-Jun-14 v3a   PJW V3a Release. Returns physical PIC in node properties
 ; 12-May-14     PJW Now using "cbusdefs8h.inc"
@@ -172,21 +166,21 @@ AUTOID    equ 0   ;Include automatic CAN ID enumeration (this may cause problems
 
 ; 
 ; Assembly options
-  LIST  P=18F2480,r=hex,N=75,C=120,T=ON
+  LIST  P=18F2480,r=dec,N=75,C=120,T=ON
 
   include   "p18f2480.inc"
   include   "cbuslib/cbusdefs.inc"
 
 
-LOCKSW  equ .128  ;Lockout 'switch' number (128..255)
-SODSW equ .129  ;SOD 'switch' number (128..255)
+LOCKSW  equ 128  ;Lockout 'switch' number (128..255)
+SODSW equ 129  ;SOD 'switch' number (128..255)
 
   ;definitions  Change these to suit hardware.
   
 ;The switch scan interval defines how often EACH switch is scanned.
 ;It also controls SOD generation delay, so keep it so that
 ;16*SCANTM = 500000uS, or change subsequent code in sodgen
-SCANTM  equ .31250  ;Switch scan interval (uS)
+SCANTM  equ 31250  ;Switch scan interval (uS)
 
 ;Calculate timer 1 constant when using a 4MHz resonator
 TMR1CN  equ 0x10000-((.4*SCANTM)/.16) ;Timer 1 count (counts UP)
@@ -200,12 +194,19 @@ S_BIT equ 4
 Modstat equ 1   ;address in EEPROM
 
 MAN_NO      equ MANU_MERG    ;manufacturer number
+MAJOR_VER   equ 3    ;Firmware major version (numeric)
+MINOR_VER   equ "b"   ;Firmware minor version (alpha)
 MODULE_ID   equ MTYP_CANACE3C ; id to identify this type of module
 EVT_NUM     equ 0           ; Number of events
 EVperEVT    equ 0           ; Event variables per event
-NV_NUM      equ .9          ; Number of node variables
+NV_NUM      equ 9          ; Number of node variables
 NODEFLGS    equ PF_COMBI + PF_BOOT
 CPU_TYPE    equ P18F2480
+BETA_VER  equ 0    ;Firmware beta version (numeric, 0 = Release)
+
+J5_SHORT  equ 0   ;Load short events in default flash table if J5 in upper position
+AUTOID    equ 0   ;Include automatic CAN ID enumeration (this may cause problems with CANCAN)
+
 
 ;Self enumeration bits stored in Datmode
 MD_NEWFRM equ 0 ;new frame received
@@ -219,27 +220,27 @@ MD_IDCONF equ 7 ;ID conflict detected
 
 SCSWITCH  equ 0x00    ;Normal switch mode
 ;Scan mode bits
-SCONONLY  equ .0      ;Bit set to send on event only
-SCOFFONLY equ .1      ;Bit set to send off event only
-SCPBPAIR  equ .2      ;Bit set if Pushbutton pair mode
-SCPBTOGG  equ .3      ;Bit set if Pushbutton toggle mode with event monitor
-SCPBTOGN  equ .4      ;Bit set if Pushbutton toggle + NO event monitor
-SCSOD   equ .5      ;Bit set to send status on receipt of SOD (only useful for SCSWITCH mode)
-SCLOCKOUT equ .6      ;Bit set to lockout switch block
-SCUNUSED  equ .7      ;Unused bit
+SCONONLY  equ 0      ;Bit set to send on event only
+SCOFFONLY equ 1      ;Bit set to send off event only
+SCPBPAIR  equ 2      ;Bit set if Pushbutton pair mode
+SCPBTOGG  equ 3      ;Bit set if Pushbutton toggle mode with event monitor
+SCPBTOGN  equ 4      ;Bit set if Pushbutton toggle + NO event monitor
+SCSOD   equ 5      ;Bit set to send status on receipt of SOD (only useful for SCSWITCH mode)
+SCLOCKOUT equ 6      ;Bit set to lockout switch block
+SCUNUSED  equ 7      ;Unused bit
 
 ;Scan flag bits
-SFONOFF   equ .0      ;Event On/Off
-SFSLIM1   equ .1      ;SLiM mode 1
-SFNSCAN   equ .2      ;Time for next scan
+SFONOFF   equ 0      ;Event On/Off
+SFSLIM1   equ 1      ;SLiM mode 1
+SFNSCAN   equ 2      ;Time for next scan
 
 ;SOD control bits (NV9)
 SODTIME   equ 0x1F    ;Mask for SOD delay time (seconds)
-SODGN1    equ .6      ;Generate ON SOD event if set
-SODGN0    equ .7      ;Generate OFF SOD event if set
+SODGN1    equ 6      ;Generate ON SOD event if set
+SODGN0    equ 7      ;Generate OFF SOD event if set
 
 ;Other flags, stored in Oflag
-OFINIT    equ .0      ;First scan after init
+OFINIT    equ 0      ;First scan after init
 
 ; definitions used by bootloader
 
@@ -483,7 +484,7 @@ OFINIT    equ .0      ;First scan after init
   ENDC
 
 ;Switch State Bits
-SS_STATE  equ .0      ;Bit set if switch is ON
+SS_STATE  equ 0      ;Bit set if switch is ON
   CBLOCK  0x180   ;Switch State (128 bytes, SS_**** bits)
   Switch_State
   ENDC  
@@ -1173,7 +1174,7 @@ rxb0int bcf   PIR3,RXB0IF
     ;error routine here. Only acts on lost arbitration in TX1
     ;used for increasing priority if send is delayed
   
-errint  movlb .15         ;change bank      
+errint  movlb 15         ;change bank      
     btfss TXB1CON,TXLARB
     bra   errbak        ;not lost arb in TX1
   
@@ -1253,7 +1254,7 @@ isRTR btfsc Datmode,MD_SETUP;setup mode?
     bra   back      ;back
 ;   btfss Mode0,1     ;FLiM?  corrected in rev s
 ;   bra   back
-    movlb .15
+    movlb 15
 isRTR1  btfsc TXB2CON,TXREQ ;wait till sent
     bra   isRTR1    
     bsf   TXB2CON,TXREQ ;send ID frame - preloaded in TXB2
@@ -1359,7 +1360,7 @@ nofl1 bcf   INTCON,TMR0IF
     bra   noflash
     decfsz  Keepcnt     ;send keep alive?
     bra   noflash
-    movlw .10
+    movlw 10
     movwf Keepcnt
     movlw OPC_NNACK
 ;   call  nnrel     ;send keep alive frame (works OK, turn off for now)
@@ -1367,7 +1368,7 @@ nofl1 bcf   INTCON,TMR0IF
 
 noflash btfsc M_PORT,S_BIT  ;setup button?
     bra   main3
-    movlw .100
+    movlw 100
     movwf Count
     clrf  Count1
     clrf  Count2
@@ -1636,7 +1637,7 @@ setNN btfss Datmode,MD_NNWAIT   ;in NN set mode?
     call  putNN     ;put in NN
     bcf   Datmode,MD_NNWAIT
     bsf   Datmode,MD_FLRUN
-    movlw .10
+    movlw 10
     movwf Keepcnt     ;for keep alive
     movlw OPC_NNACK
     call  nnrel     ;confirm NN set
@@ -1852,7 +1853,7 @@ setup clrf  INTCON      ;no interrupts yet
     movwf RXB0CON     ;enable double buffer of RX0
     
 ;new code for extended frames bug fix
-    movlb .15
+    movlb 15
     movlw B'00100000'   ;reject extended frames
     movwf RXB1CON
     clrf  RXF0SIDL
@@ -1921,7 +1922,7 @@ setid bsf   Mode0,1     ;flag FLiM
     call  newid_f     ;put ID into Tx1buf, TXB2 and ID number store
     
 seten_f   
-    movlb .15
+    movlb 15
     bcf RXB1CON,RXFUL
     movlb 0
     bcf RXB0CON,RXFUL   ;ready for next
@@ -1974,7 +1975,7 @@ not_new bcf   Mode0,0
     
     ;
 seten   
-    movlb .15
+    movlb 15
     bcf RXB1CON,RXFUL
     movlb 0
     bcf RXB0CON,RXFUL   ;ready for next
@@ -2000,7 +2001,7 @@ seten
 sendTX1 lfsr  0,Tx1con
     lfsr  1,TXB1CON
     
-    movlb .15       ;check for buffer access
+    movlb 15       ;check for buffer access
 ldTx2 btfsc TXB1CON,TXREQ ; Tx buffer available...?
     bra   ldTx2     ;...not yet
     movlb 0
@@ -2010,7 +2011,7 @@ ldTX1 movf  POSTINC0,W
     movlw Tx1d7+1
     cpfseq  FSR0L
     bra   ldTX1
-    movlb .15       ;bank 15
+    movlb 15       ;bank 15
 tx1test btfsc TXB1CON,TXREQ ;test if clear to send
     bra   tx1test
     bsf   TXB1CON,TXREQ ;OK so send
@@ -2029,7 +2030,7 @@ sendTXa movf  Dlc,W       ;get data length
     andwf Tx1sidh,F
     movlw B'10110000'
     iorwf Tx1sidh     ;low priority
-    movlw .10
+    movlw 10
     movwf Latcount
     call  sendTX1     ;send frame
     return          
@@ -2093,7 +2094,7 @@ newid1  movwf CanID_tmp
     iorwf Tx1sidh     ;leave priority bits alone
     movf  IDtempl,W
     movwf Tx1sidl     ;only top three bits used
-    movlb .15       ;put ID into TXB2 for enumeration response to RTR
+    movlb 15       ;put ID into TXB2 for enumeration response to RTR
 new_1 btfsc TXB2CON,TXREQ ;wait till sent
     bra   new_1
     clrf  TXB2SIDH
@@ -2143,7 +2144,7 @@ newid_f   movlw LOW CANid     ;put in stored ID. FLiM mode
     call  eeread
     movwf NN_templ  
     
-    movlb .15       ;put ID into TXB2 for enumeration response to RTR
+    movlb 15       ;put ID into TXB2 for enumeration response to RTR
 new_1f  btfsc TXB2CON,TXREQ
     bra   new_1f
     clrf  TXB2SIDH
@@ -2239,7 +2240,7 @@ eetest  btfsc EECON1,WR
 ;*********************************************************
 ;   a delay routine
       
-dely  movlw .10
+dely  movlw 10
     movwf Dcount1
 dely2 clrf  Dcount
 dely1 decfsz  Dcount,F
@@ -2251,7 +2252,7 @@ dely1 decfsz  Dcount,F
 ;************************************************************************ 
 ;   longer delay
 
-ldely movlw .100
+ldely movlw 100
     movwf Count2
 ldely1  call  dely
     decfsz  Count2
@@ -2356,7 +2357,7 @@ scan3 movf  Ccount,W    ;Get column count (0..15)
     addwf WREG,W      ;*4
     addwf Bitcnt,W    ;Add bit (0..7)
     btfsc Bitcnt,2    ;Skip if left hand bank
-    addlw .60       ;Add offset for right hand bank
+    addlw 60       ;Add offset for right hand bank
     andlw 0x7F      ;Keep in range
     movwf Index     ;And save switch number (0..127)
     ;Calculate block number (0..7)
@@ -2387,10 +2388,10 @@ sodgen  bcf   Oflag,OFINIT  ;Clear init flag
     movf  SodMode,W   ;Get SOD mode
     bz    sodgenx     ;Nothing to do
     andlw SODTIME     ;Mask out time
-#if SCANTM*.16 == .500000
+#if SCANTM*.16 == 500000
     addwf WREG,W      ;*2 to get units of 500mS
 #else
-#if SCANTM*.16 != .1000000
+#if SCANTM*.16 != 1000000
     ERROR Need to modify sodgen to generate correct delay!
 #endif
 #endif
@@ -2535,7 +2536,7 @@ sndpkt6 movlw B'00001111'   ;clear last priority
     andwf Tx1sidh,F
     movlw B'10110000'   ;starting priority
     iorwf Tx1sidh,F
-    movlw .10
+    movlw 10
     movwf Latcount
     goto  sendTX      ;send CAN frame and return
 
@@ -2595,7 +2596,7 @@ inscan1 movlw B'00001111'
     bra   inscan1     ;next column
                 ;finish scan  
     ; Clear toggle memory
-    movlw .128      ;128 bytes to clear
+    movlw 128      ;128 bytes to clear
     lfsr  FSR0,Switch_State;Point to state
 inscan3 clrf  POSTINC0    ;clear toggle state
     decfsz  WREG,W      ;drop count, skip if 0
@@ -2623,7 +2624,7 @@ monib1  movwf POSTINC0    ;Store 0xFF, increment FSR
     lfsr  FSR0,ScMode0  ;Point to scan modes
 monib2  btfsc INDF0,SCPBTOGG  ;Skip if not toggle monitor mode
     bra   monib3      ;Do next
-monibx  movlw .16       ;16 switches per block
+monibx  movlw 16       ;16 switches per block
     addwf Index,F     ;Advance index
     bra   monib4      ;and loop
 
@@ -2911,7 +2912,7 @@ numParams
     return
     
 pidxerr
-    movlw .10
+    movlw 10
     call  errsub
     return
     
@@ -2965,7 +2966,7 @@ self_en movff FSR1L,Fsr_tmp1Le  ;save FSR1 just in case
     movwf INTCON      ;start interrupts if not already started
     bsf   Datmode,MD_SETUP    ;set to 'setup' mode
     clrf  Tx1con      ;CAN ID enumeration. Send RTR frame, start timer
-    movlw .14
+    movlw 14
     movwf Count
     lfsr  FSR0, Enum0
 clr_en
@@ -2987,7 +2988,7 @@ clr_en
     movlw B'10110001'
     movwf T3CON     ;enable timer 3
 
-    movlw .10
+    movlw 10
     movwf Latcount
     
     call  sendTXa     ;send RTR frame
@@ -3015,7 +3016,7 @@ here  movf  Roll,W
     rlcf  Roll,F
     incf  IDcount,F
     bra   here
-here2 movlw .100        ;limit to ID
+here2 movlw 100        ;limit to ID
     cpfslt  IDcount
     bra   segful        ;segment full
     
@@ -3059,7 +3060,7 @@ learn_event
     addlw high Event_Table
     movwf TBLPTRH
     
-    movlw .64         ;read block 
+    movlw 64         ;read block 
     movwf Flcount
     lfsr  FSR2,Flash_buf    ;point to holding buffer
     clrf  TBLPTRU
@@ -3157,9 +3158,9 @@ f_write movlw B'11000000'
     andwf TBLPTRL,F     ;put to 64 byte boundary
     tblrd*-           ;back 1
 f_writx lfsr  FSR2,Flash_buf    ;ready for rewrite
-    movlw .8
+    movlw 8
     movwf Flcount
-f_wr1 movlw .8
+f_wr1 movlw 8
     movwf Flcount1
   
     
@@ -3197,7 +3198,7 @@ wr_done btfsc EECON1,WR     ;write done?
 clear_events
     clrf  ENtempl     ;start at beginning
     clrf  ENtemph
-    movlw .16       ;set for erase all. 16 blocks
+    movlw 16       ;set for erase all. 16 blocks
     movwf Count
     clrf  TBLPTRU     ;set to flash start
     movlw high Event_Table
@@ -3207,7 +3208,7 @@ clear_events
 c_buf call  event_erase   ;erase 64 bytes (16 entries)
     dcfsnz  Count
     bra   fb0       ;all done
-    movlw .64       ;next block to erase
+    movlw 64       ;next block to erase
     bcf   STATUS,C
     addwf ENtempl
     bnc   c_buf
@@ -3218,7 +3219,7 @@ c_buf call  event_erase   ;erase 64 bytes (16 entries)
 
 fb0   clrf  Count1      ;button number
     incf  Count1      ;button numbers start at 1
-    movlw .16       ;16 pages of 64 bytes (16 entries) to do
+    movlw 16       ;16 pages of 64 bytes (16 entries) to do
     movwf Count2
     clrf  TBLPTRU     ;set to flash start
     movlw high Event_Table
@@ -3227,7 +3228,7 @@ fb0   clrf  Count1      ;button number
     tblrd*-
 
 fb1   lfsr  FSR2,Flash_buf
-    movlw .16
+    movlw 16
     movwf Count
 fb2
 #if J5_SHORT          ;Default to short events if FLiM mode and J5 in upper posn
@@ -3365,7 +3366,7 @@ lock_load
 Event_Table
   ;Don't reserve any space here though as it'll overwrite
   ;the event table when programming the PIC!
-  ;res    .256*.4
+  ;res    256*4
 
 ;************************************************************************
   ORG 0xF00000      ;EEPROM data. Defaults
