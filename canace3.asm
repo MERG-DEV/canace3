@@ -103,14 +103,39 @@
   LIST  P=18F2480,r=dec,N=75,C=120,T=ON
 
   include   "p18f2480.inc"
+
+; Set CONFIG
+; NOTE.: There seem to be differences in the naming of the CONFIG parameters
+;        between versions of the p18F2480.inf files
+
+  CONFIG  FCMEN = OFF, OSC = HSPLL, IESO = OFF
+  CONFIG  PWRT = ON,BOREN = BOHW, BORV=0
+  CONFIG  WDT=OFF
+  CONFIG  MCLRE = ON
+  CONFIG  LPT1OSC = OFF, PBADEN = OFF
+  CONFIG  DEBUG = OFF
+  CONFIG  XINST = OFF,LVP = OFF,STVREN = ON,CP0 = OFF
+  CONFIG  CP1 = OFF, CPB = OFF, CPD = OFF,WRT0 = OFF,WRT1 = OFF, WRTB = OFF
+  CONFIG  WRTC = OFF,WRTD = OFF, EBTR0 = OFF, EBTR1 = OFF, EBTRB = OFF
+
+  ;definitions  Change these to suit hardware.
+  
   include   "cbuslib/cbusdefs.inc"
 
+MAN_NO      equ MANU_MERG     ; Manufacturer number
+MAJOR_VER   equ 3             ; Firmware major version (numeric)
+MINOR_VER   equ "b"           ; Firmware minor version (alpha)
+MODULE_ID   equ MTYP_CANACE3C ; Id to identify this type of module
+EVT_NUM     equ 0             ; Number of events
+EVperEVT    equ 0             ; Event variables per event
+NV_NUM      equ 9             ; Number of node variables
+NODEFLGS    equ PF_COMBI + PF_BOOT
+CPU_TYPE    equ P18F2480
+BETA_VER    equ 0             ; Firmware beta version (numeric, 0 = Release)
 
 LOCKSW  equ 128  ;Lockout 'switch' number (128..255)
 SODSW equ 129  ;SOD 'switch' number (128..255)
 
-  ;definitions  Change these to suit hardware.
-  
 ;The switch scan interval defines how often EACH switch is scanned.
 ;It also controls SOD generation delay, so keep it so that
 ;16*SCANTM = 500000uS, or change subsequent code in sodgen
@@ -126,17 +151,6 @@ M_PORT  equ PORTA
 M_BIT equ 5   ;mode toggle or PB
 S_BIT equ 4
 Modstat equ 1   ;address in EEPROM
-
-MAN_NO      equ MANU_MERG    ;manufacturer number
-MAJOR_VER   equ 3    ;Firmware major version (numeric)
-MINOR_VER   equ "b"   ;Firmware minor version (alpha)
-MODULE_ID   equ MTYP_CANACE3C ; id to identify this type of module
-EVT_NUM     equ 0           ; Number of events
-EVperEVT    equ 0           ; Event variables per event
-NV_NUM      equ 9          ; Number of node variables
-NODEFLGS    equ PF_COMBI + PF_BOOT
-CPU_TYPE    equ P18F2480
-BETA_VER  equ 0    ;Firmware beta version (numeric, 0 = Release)
 
 J5_SHORT  equ 0   ;Load short events in default flash table if J5 in upper position
 AUTOID    equ 0   ;Include automatic CAN ID enumeration (this may cause problems with CANCAN)
@@ -175,21 +189,6 @@ SODGN0    equ 7      ;Generate OFF SOD event if set
 
 ;Other flags, stored in Oflag
 OFINIT    equ 0      ;First scan after init
-
-;set config registers
-
-; note. there seem to be differences in the naming of the CONFIG parameters between
-; versions of the p18F2480.inf files
-
-  CONFIG  FCMEN = OFF, OSC = HSPLL, IESO = OFF
-  CONFIG  PWRT = ON,BOREN = BOHW, BORV=0
-  CONFIG  WDT=OFF
-  CONFIG  MCLRE = ON
-  CONFIG  LPT1OSC = OFF, PBADEN = OFF
-  CONFIG  DEBUG = OFF
-  CONFIG  XINST = OFF,LVP = OFF,STVREN = ON,CP0 = OFF
-  CONFIG  CP1 = OFF, CPB = OFF, CPD = OFF,WRT0 = OFF,WRT1 = OFF, WRTB = OFF
-  CONFIG  WRTC = OFF,WRTD = OFF, EBTR0 = OFF, EBTR1 = OFF, EBTRB = OFF
 
 ;********************************************************************************
 #define HIGH_INT_VECT 0x0808  ;HP interrupt vector redirect. Change if target is different
