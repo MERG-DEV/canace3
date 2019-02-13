@@ -144,12 +144,16 @@ SCANTM  equ 31250  ;Switch scan interval (uS)
 ;Calculate timer 1 constant when using a 4MHz resonator
 TMR1CN  equ 0x10000-((.4*SCANTM)/.16) ;Timer 1 count (counts UP)
 
-S_PORT  equ PORTB ;setup switch  Change as needed
-S_BIT0  equ 4     ; bits used for node number and CAN ID
-S_BIT1  equ 5
-M_PORT  equ PORTA
 M_BIT equ 5   ;mode toggle or PB
-S_BIT equ 4
+#define     M_INP   PORTA,M_BIT
+S_BIT       equ 4
+#define     S_INP   PORTA,S_BIT
+
+LED2        equ 7 ;PB7 is the green LED on the PCB
+#define     LED2_OUT   PORTB,LED2
+LED1        equ 6 ;PB6 is the yellow LED on the PCB
+#define     LED1_OUT   PORTB,LED1
+
 Modstat equ 1   ;address in EEPROM
 
 J5_SHORT  equ 0   ;Load short events in default flash table if J5 in upper position
@@ -597,11 +601,11 @@ main0 btfsc Mode0,1     ;is it SLiM?
     bra   main_a      ;no
     btfss INTCON,TMR0IF   ;is it flash?
     bra   main_a
-    btg   PORTB,7     ;flash green
+    btg   LED2_OUT     ;flash green
     bcf   INTCON,TMR0IF
 
 main_a  movlw B'00110000'   ;get NN from switches
-    andwf S_PORT,W
+    andwf PORTB,W
     movwf Temp
     swapf Temp,W
     addlw 1
@@ -616,7 +620,7 @@ setnew  movwf Atemp
     call  newid1
     call  clear_events  ;reinstate new NN in FLASH buffer
     call  wrack     ;may not need in SLiM?
-no_new  btfsc M_PORT,M_BIT
+no_new  btfsc M_INP
     bra   mset
     btfss Mode2,0
     bra   noflash       ;do nothing
@@ -649,7 +653,7 @@ mainf_1
     btfss Datmode,MD_NNWAIT
     bra   nofl1
     
-    btg   PORTB,6     ;flash yellow LED
+    btg   LED1_OUT     ;flash yellow LED
     
 nofl1 bcf   INTCON,TMR0IF
     btfss Datmode,MD_FLRUN  ;running mode
@@ -662,7 +666,7 @@ nofl1 bcf   INTCON,TMR0IF
 ;   call  nnrel     ;send keep alive frame (works OK, turn off for now)
 
 
-noflash btfsc M_PORT,S_BIT  ;setup button?
+noflash btfsc S_INP  ;setup button?
     bra   main3
     movlw 100
     movwf Count
@@ -674,19 +678,19 @@ wait  decfsz  Count2
     bra   wait2
     btfss INTCON,TMR0IF   ;is it flash?
     bra   wait2
-    btg   PORTB,6     ;flash LED
+    btg   LED1_OUT     ;flash LED
     bcf   INTCON,TMR0IF
 wait2 decfsz  Count1
     goto  wait
-    btfsc M_PORT,S_BIT
+    btfsc S_INP
     bra   main4     ;not held long enough
     decfsz  Count
     goto  wait
     btfss Mode0,1     ;is it in FLiM?
     bra   go_FLiM
     clrf  Datmode     ;back to virgin
-    bcf   PORTB,6     ;yellow off
-    bsf   PORTB,7     ;Green LED on
+    bcf   LED1_OUT     ;yellow off
+    bsf   LED2_OUT     ;Green LED on
     clrf  INTCON      ;interrupts off
     movlw 1
     movwf IDcount     ;back to start
@@ -698,10 +702,10 @@ wait2 decfsz  Count1
     call  nnrel
     clrf  NN_temph
     clrf  NN_templ
-wait1 btfss M_PORT,S_BIT
+wait1 btfss S_INP
     bra   wait1     ;wait till release
     call  ldely
-    btfss M_PORT,S_BIT
+    btfss S_INP
     bra   wait1
     
     movlw LOW NodeID      ;put NN back to 0000
@@ -719,11 +723,11 @@ wait1 btfss M_PORT,S_BIT
     call  eewrite       ;mode back to SLiM
     clrf  Datmode
     bcf   Mode0,1
-    bcf   PORTB,6
-    bsf   PORTB,7       ;green LED on
+    bcf   LED1_OUT
+    bsf   LED2_OUT       ;green LED on
     clrf  Atemp       ;for new NN and ID
     clrf  Mode2
-    btfsc M_PORT,M_BIT    ;check for SLiM scan mode
+    btfsc M_INP    ;check for SLiM scan mode
     bsf   Mode2,0
     call  buf_init    
     call  scan_init
@@ -749,7 +753,7 @@ main4 btfsc Mode0,1       ;is it SLiM?
     bra   main4b
     bcf   Mode0,2       ;out of learn
     bcf   Mode0,3
-    bsf   PORTB,7       ;green back on
+    bsf   LED2_OUT       ;green back on
     bra   main1
 main4b  bsf   Mode0,2       ;into learn
     bra   main1
@@ -759,7 +763,7 @@ main4a  ;btfss  Datmode,MD_FLRUN
     btfss Datmode,MD_NNWAIT
     bra   mset2
     bcf   Datmode,MD_NNWAIT
-    bsf   PORTB,6     ;LED on
+    bsf   LED1_OUT     ;LED on
     movlw OPC_NNACK
     call  nnrel
     movlw Modstat
@@ -783,12 +787,12 @@ main3 btfss Datmode,MD_SETUP    ;setup mode ?
     bsf   Datmode,MD_NNWAIT   ;wait for NN
 ;   call  nnack     ;send blank NN for config
   
-;   bsf   PORTB,7     ;on light
+;   bsf   LED2_OUT     ;on light
     bra   main0     ;continue normally
     
     
 go_FLiM bsf   Datmode,MD_SETUP    ;FLiM setup mode
-    bcf   PORTB,7     ;green off
+    bcf   LED2_OUT     ;green off
     bra   wait1
     
 ; common to FLiM and SLiM   
@@ -939,7 +943,7 @@ setNN btfss Datmode,MD_NNWAIT   ;in NN set mode?
     call  nnrel     ;confirm NN set
     call  loadnv      ;reload NV's
     call  buf_init    ;and reinitialise scan
-    bsf   PORTB,6     ;LED ON
+    bsf   LED1_OUT     ;LED ON
     bra   main2
     
 sendNN  btfss Datmode,MD_NNWAIT   ;in NN set mode?
@@ -1062,7 +1066,7 @@ teach movlw B'00001100'   ;is it learn and button pressed?
     call  learn_event
     bcf   Mode0,3
     bcf   Mode0,2
-    bsf   PORTB,7     ;green steady
+    bsf   LED2_OUT     ;green steady
     bra   l_out2
 
 teach_f btfss Mode0,4     ;is it in learn mode?
@@ -1082,7 +1086,7 @@ readEV
     bra   l_out2
     
 l_out bcf   Datmode,MD_EMSUP
-    bcf   PORTB,6
+    bcf   LED1_OUT
 l_out1  bcf   Datmode,MD_EVRD
 l_out2  bcf   Datmode,MD_NEWFRM
     
@@ -1122,8 +1126,8 @@ setup clrf  INTCON      ;no interrupts yet
                 ;input - RB6,7 for debug and diagnostics LEDs
     movwf TRISB
     bsf   PORTB,2     ;CAN recessive
-    bcf   PORTB,6
-    bcf   PORTB,7
+    bcf   LED1_OUT
+    bcf   LED2_OUT
     movlw B'11111111'   ;Port C  row inputs.
     movwf TRISC
     
@@ -1200,7 +1204,7 @@ mskloop clrf  POSTINC0
     clrf  Sflag
     
 no_load clrf  Mode2
-    btfsc M_PORT,M_BIT  ;initialise SLiM mode for scan
+    btfsc M_INP  ;initialise SLiM mode for scan
     bsf   Mode2,0
   
     ;test for setup mode
@@ -1227,8 +1231,8 @@ seten_f
     clrf  PIR3      ;clear all flags
     movlw B'11000000'
     movwf INTCON      ;enable interrupts
-    bcf   PORTB,7
-    bsf   PORTB,6     ;RUN LED on. (yellow for FLiM)
+    bcf   LED2_OUT
+    bsf   LED1_OUT     ;RUN LED on. (yellow for FLiM)
     bcf   Datmode,0
     call  loadnv      ;Get NV's from EEPROM
     call  buf_init    ;and initialise buffers
@@ -1281,8 +1285,8 @@ seten
     
     movlw B'11000000'
     movwf INTCON      ;enable interrupts
-    bcf   PORTB,6
-    bsf   PORTB,7     ;RUN LED on. Green for SLiM
+    bcf   LED1_OUT
+    bsf   LED2_OUT     ;RUN LED on. Green for SLiM
     call  buf_init  
     goto  main0
   
@@ -2530,7 +2534,7 @@ fb2
 #if J5_SHORT          ;Default to short events if FLiM mode and J5 in upper posn
     btfss Mode0,1     ;Skip if FLiM?
     bra   fb2a      ;If SLiM
-    btfss M_PORT,M_BIT  ;Check J5
+    btfss M_INP  ;Check J5
     bra   fb2a      ;Use defaults
     clrf  POSTINC2    ;Zero; use short event
     clrf  POSTINC2
