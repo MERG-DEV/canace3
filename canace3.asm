@@ -144,7 +144,7 @@ SCANTM  equ 31250  ;Switch scan interval (uS)
 ;Calculate timer 1 constant when using a 4MHz resonator
 TMR1CN  equ 0x10000-((.4*SCANTM)/.16) ;Timer 1 count (counts UP)
 
-M_BIT equ 5   ;mode toggle or PB
+M_BIT       equ 5   ;mode toggle or PB
 #define     M_INP   PORTA,M_BIT
 S_BIT       equ 4
 #define     S_INP   PORTA,S_BIT
@@ -153,6 +153,8 @@ LED2        equ 7 ;PB7 is the green LED on the PCB
 #define     LED2_OUT   PORTB,LED2
 LED1        equ 6 ;PB6 is the yellow LED on the PCB
 #define     LED1_OUT   PORTB,LED1
+
+COL_PORT    equ     PORTA
 
 Modstat equ 1   ;address in EEPROM
 
@@ -1676,7 +1678,7 @@ scan4 rlncf Bitmask,F   ;Move mask
 scan5 incf  Ccount,F    ;Next column
     movf  Ccount,W    ;Get column count
     andlw 0x0F      ;Mask crud
-    movwf PORTA     ;Send it to the 1:16 decoder to select a column
+    movwf COL_PORT  ;Send it to the 1:16 decoder to select a column
     movf  Ccount,W    ;Get column count again
     bz    sodgen      ;Check for SOD generation
     return          ;finish scan    
@@ -1887,7 +1889,7 @@ buf_init clrf Ccount      ;column count
 inscan1 movlw B'00001111'
     andwf Ccount,F
     movf  Ccount,W
-    movwf PORTA     ;set columns
+    movwf COL_PORT  ;set columns
     incf  Ccount      ;next column
     movf  PORTC,W     ;get row data
     xorlw 0xFF      ;Invert bits
