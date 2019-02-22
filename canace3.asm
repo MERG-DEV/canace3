@@ -825,59 +825,78 @@ packet
     movlw OPC_ACON      ;is it a long event to teach/monitor?
     subwf Rx0d0,W
     bz    teach1
+
     movlw OPC_ACOF      ;is it a long event to teach/monitor?
     subwf Rx0d0,W
     bz    teach1
+
     movlw OPC_ASON      ;is it a short event to teach/monitor?
     subwf Rx0d0,W
     bz    teach0
+
     movlw OPC_ASOF    ;is it a short event to teach/monitor?
     subwf Rx0d0,W
     bz    teach0
+
     movlw OPC_BOOT      ;reboot
     subwf Rx0d0,W
     bz    reboot
+
     movlw OPC_RQNPN
     subwf Rx0d0,W
     bz    para1a      ;read individual parameters
+
     movlw OPC_QNN     ; QNN
     subwf Rx0d0,W
     bz    doQnn
+
     btfss Mode0,1     ; FLiM mode?
     bra   main2
+
     movlw OPC_SNN     ;set NN
     subwf Rx0d0,W
     bz    setNN
+
     movlw OPC_RQNP    ;read manufacturer
     subwf Rx0d0,W
     bz    params1     ;read node parameters
+
     movlw OPC_RQMN
     subwf Rx0d0,w
     bz    name      ;read module name
+
     movlw OPC_NNLRN   ;FLiM learn mode
     subwf Rx0d0,W
     bz    fl_lrn1
+
     movlw OPC_NNULN   ;FLiM out of learn mode
     subwf Rx0d0,W
     bz    fl_ulrn1
+
     movlw OPC_NENRD   ;read back event by index
     subwf Rx0d0,W
     bz    readEV1
+
     movlw OPC_NVSET   ;set a NV
     subwf Rx0d0,W
     bz    setNV
-    movlw OPC_NVRD    ;read a NV
+ 
+   movlw OPC_NVRD    ;read a NV
     subwf Rx0d0,W
     bz    readNV
+
     movlw OPC_EVLRNI    ;FLiM teach event
     subwf Rx0d0,W
     bz    fl_tch1
+
     movlw OPC_NNCLR   ;clear events back to default
     subwf Rx0d0,W
     bz    undo1
+
     movlw OPC_ENUM    ;re-enumerate
     subwf Rx0d0,W
     bz    enum1
+
     movlw OPC_CANID   ;force new CAN_ID
     subwf Rx0d0,W
     bz    newID1
