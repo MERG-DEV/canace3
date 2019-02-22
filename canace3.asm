@@ -145,8 +145,8 @@ SCANTM      equ 31250  ; Switch scan interval (uS)
 ; Calculate timer 1 constant when using a 4MHz resonator
 TMR1CN      equ 0x10000 - ((4 * SCANTM) / 16) ; Timer 1 count (counts UP)
 
-#define   M_INP     PORTA,5 ; Mode: Toggle or Push Button
-#define   S_INP     PORTA,4 ; Setup Switch
+#define   MODE_INP     PORTA,5 ; Mode: Toggle or Push Button
+#define   SETUP_INP     PORTA,4 ; Setup Switch
 #define   LEDG_OUT  PORTB,7 ; Green LED
 #define   LEDY_OUT  PORTB,6 ; Yellow LED
 
@@ -193,6 +193,9 @@ SODGN0      equ 7    ; Generate OFF SOD event if set
 
 ;Other flags, stored in Oflag
 OFINIT      equ 0    ; First scan after init
+
+#define  FLiM_MODE   Mode0,1
+#define  FLiM_LEARN  Mode0,4
 
 ;*******************************************************************************
 #define HIGH_INT_VECT 0x0808
@@ -513,7 +516,7 @@ load  movf  POSTINC1,W
     bz    back
     bsf   Datmode,MD_NEWFRM ;valid message frame
 
-    btfss Mode0,1       ;FLim Mode?
+    btfss FLiM_MODE       ;FLim Mode?
     bra   back        ; dont do Can ID check if SLiM mode
 #if AUTOID
     ;check for ID conflict
@@ -587,7 +590,7 @@ enum_3  movf  Roll,W
 
 ;   org   0xA00     ;set to page boundary
 ;*************************************************************
-main0 btfsc Mode0,1     ;is it SLiM?
+main0 btfsc FLiM_MODE     ;is it SLiM?
     bra   mainf
     btfss Mode0,2     ;SLiM learn?
     bra   main_a      ;no
@@ -612,7 +615,7 @@ setnew  movwf Atemp
     call  newid1
     call  clear_events  ;reinstate new NN in FLASH buffer
     call  wrack     ;may not need in SLiM?
-no_new  btfsc M_INP
+no_new  btfsc MODE_INP
     bra   mset
     btfss Mode2,0
     bra   noflash       ;do nothing
@@ -657,7 +660,7 @@ nofl1 bcf   INTCON,TMR0IF
     movlw OPC_NNACK
 
 
-noflash btfsc S_INP  ;setup button?
+noflash btfsc SETUP_INP  ;setup button?
     bra   main3
     movlw 100
     movwf Count
@@ -673,11 +676,11 @@ wait  decfsz  Count2
     bcf   INTCON,TMR0IF
 wait2 decfsz  Count1
     goto  wait
-    btfsc S_INP
+    btfsc SETUP_INP
     bra   main4     ;not held long enough
     decfsz  Count
     goto  wait
-    btfss Mode0,1     ;is it in FLiM?
+    btfss FLiM_MODE     ;is it in FLiM?
     bra   go_FLiM
     clrf  Datmode     ;back to virgin
     bcf   LEDY_OUT     ;yellow off
@@ -693,10 +696,10 @@ wait2 decfsz  Count1
     call  nnrel
     clrf  NN_temph
     clrf  NN_templ
-wait1 btfss S_INP
+wait1 btfss SETUP_INP
     bra   wait1     ;wait till release
     call  ldely
-    btfss S_INP
+    btfss SETUP_INP
     bra   wait1
 
     movlw LOW NodeID      ;put NN back to 0000
@@ -706,19 +709,19 @@ wait1 btfss S_INP
     incf  EEADR
     movlw 0
     call  eewrite
-    btfss Mode0,1
+    btfss FLiM_MODE
     bra   main5       ;FLiM setup
     movlw Modstat
     movwf EEADR
     movlw 0
     call  eewrite       ;mode back to SLiM
     clrf  Datmode
-    bcf   Mode0,1
+    bcf   FLiM_MODE
     bcf   LEDY_OUT
     bsf   LEDG_OUT       ;green LED on
     clrf  Atemp       ;for new NN and ID
     clrf  Mode2
-    btfsc M_INP    ;check for SLiM scan mode
+    btfsc MODE_INP    ;check for SLiM scan mode
     bsf   Mode2,0
     call  buf_init
     call  scan_init
@@ -731,14 +734,14 @@ main5 movlw Modstat
     movwf EEADR
     movlw 1
     call  eewrite       ;mode to FLiM in EEPROM
-    bsf   Mode0,1       ;to FLiM
+    bsf   FLiM_MODE       ;to FLiM
     call  self_en
     bcf   Datmode,MD_SETUP
     call  nnack       ;send request for NN
     bsf   Datmode,MD_NNWAIT
     bra   main1
 
-main4 btfsc Mode0,1       ;is it SLiM?
+main4 btfsc FLiM_MODE       ;is it SLiM?
     bra   main4a
     btfss Mode0,2
     bra   main4b
@@ -795,11 +798,11 @@ params1 goto  params
 fl_lrn1 goto  fl_lrn
 fl_ulrn1  goto  fl_ulrn
 
-teach0  clrf  Rx0d1     ; Clear node from short events
+short  clrf  Rx0d1     ; Clear node from short events
     clrf  Rx0d2
-teach1  btfss Mode0,1     ; Skip if FLiM mode
+go_on_x  btfss FLiM_MODE     ; Skip if FLiM mode
     goto  teach     ; SLIM Mode
-    btfss Mode0,4     ; Skip if FLIM learn
+    btfss FLiM_LEARN     ; Skip if FLIM learn
     call  do_event    ; Process event
     bra   main2
 
@@ -824,19 +827,19 @@ doQnn
 packet
     movlw OPC_ACON      ;is it a long event to teach/monitor?
     subwf Rx0d0,W
-    bz    teach1
+    bz    go_on_x
 
     movlw OPC_ACOF      ;is it a long event to teach/monitor?
     subwf Rx0d0,W
-    bz    teach1
+    bz    go_on_x
 
     movlw OPC_ASON      ;is it a short event to teach/monitor?
     subwf Rx0d0,W
-    bz    teach0
+    bz    short
 
     movlw OPC_ASOF    ;is it a short event to teach/monitor?
     subwf Rx0d0,W
-    bz    teach0
+    bz    short
 
     movlw OPC_BOOT      ;reboot
     subwf Rx0d0,W
@@ -850,7 +853,7 @@ packet
     subwf Rx0d0,W
     bz    doQnn
 
-    btfss Mode0,1     ; FLiM mode?
+    btfss FLiM_MODE     ; FLiM mode?
     bra   main2
 
     movlw OPC_SNN     ;set NN
@@ -957,7 +960,7 @@ sendNN  btfss Datmode,MD_NNWAIT   ;in NN set mode?
     movwf Tx1d0
     movlw 3
     movwf Dlc
-    call  sendTX
+    call  TX_data
     bra   main2
 
 enum  call  thisNN
@@ -1022,7 +1025,7 @@ rdNV1 movlw OPC_NVANS
     movwf Tx1d0
     movlw 5
     movwf Dlc
-    call  sendTX
+    call  TX_data
     bra   main2
 
 notNX clrf  Tx1d3     ;invalid index
@@ -1033,14 +1036,14 @@ fl_lrn
     call  thisNN
     sublw 0
     bnz   notNN1
-    bsf   Mode0,4     ;set FLiM learn mode
+    bsf   FLiM_LEARN     ;set FLiM learn mode
     bra   main2
-fl_ulrn btfss Mode0,1     ;is it in FLiM?
+fl_ulrn btfss FLiM_MODE     ;is it in FLiM?
     bra   main2
     call  thisNN
     sublw 0
     bnz   notNN1
-    bcf   Mode0,4     ;clear FLiM learn mode
+    bcf   FLiM_LEARN     ;clear FLiM learn mode
     bra   main2
 
 fl_teach
@@ -1052,7 +1055,7 @@ undo
     call  thisNN
     sublw 0
     bnz   notNN1
-    btfss Mode0,4     ;is it in FLiM learn?
+    btfss FLiM_LEARN     ;is it in FLiM learn?
     bra   main2
     call  clear_events
     call  wrack
@@ -1074,7 +1077,7 @@ teach movlw B'00001100'   ;is it learn and button pressed?
     bsf   LEDG_OUT     ;green steady
     bra   l_out2
 
-teach_f btfss Mode0,4     ;is it in learn mode?
+teach_f btfss FLiM_LEARN     ;is it in learn mode?
     bra   l_out2
     movff Rx0d5,Index   ;Rx0d7 has index
     decf  Index,F     ;sent as base 1
@@ -1100,7 +1103,7 @@ l_out2  bcf   Datmode,MD_NEWFRM
     goto  main2
 
 
-do    btfss Mode0,1     ;is it FLiM?
+do    btfss FLiM_MODE     ;is it FLiM?
     bra   do2
     btfss Datmode,MD_FLRUN    ;ignore if not set up
     bra   do1
@@ -1209,7 +1212,7 @@ mskloop clrf  POSTINC0
     clrf  Sflag
 
 no_load clrf  Mode2
-    btfsc M_INP  ;initialise SLiM mode for scan
+    btfsc MODE_INP  ;initialise SLiM mode for scan
     bsf   Mode2,0
 
     ;test for setup mode
@@ -1223,7 +1226,7 @@ no_load clrf  Mode2
     bra   slimset     ;set up in SLiM mode
 
 
-setid bsf   Mode0,1     ;flag FLiM
+setid bsf   FLiM_MODE     ;flag FLiM
     call  newid_f     ;put ID into Tx1buf, TXB2 and ID number store
 
 seten_f
@@ -1266,7 +1269,7 @@ slimset movlw B'00110000'   ;get DIP switch setting
 
 not_new bcf   Mode0,0
 
-    bcf   Mode0,1     ;not FLiM
+    bcf   FLiM_MODE     ;not FLiM
 
     movf  NN_templ,W
     call  newid1      ;put ID into Tx1buf, TXB2 and ID number store
@@ -1302,7 +1305,7 @@ seten
 
 ;   Send contents of Tx1 buffer via CAN TXB1
 
-sendTX1 lfsr  0,Tx1con
+TX_frame lfsr  0,Tx1con
     lfsr  1,TXB1CON
 
     movlb 15       ;check for buffer access
@@ -1324,11 +1327,10 @@ tx1done movlb 0       ;bank 0
     return          ;successful send
 
 
-sendTXNN
+TX_with_NN
     movff NN_temph,Tx1d1
     movff NN_templ,Tx1d2
-sendTX
-sendTXa movf  Dlc,W       ;get data length
+TX_data movf  Dlc,W       ;get data length
     movwf Tx1dlc
     movlw B'00001111'   ;clear old priority
     andwf Tx1sidh,F
@@ -1336,7 +1338,7 @@ sendTXa movf  Dlc,W       ;get data length
     iorwf Tx1sidh     ;low priority
     movlw 10
     movwf Latcount
-    call  sendTX1     ;send frame
+    call  TX_frame     ;send frame
     return
 
 
@@ -1413,7 +1415,7 @@ new_1 btfsc TXB2CON,TXREQ ;wait till sent
 
     return
 
-nnack btfss Mode0,1     ;FLiM?
+nnack btfss FLiM_MODE     ;FLiM?
     return
     movlw OPC_RQNN    ;request frame for new NN or ack if not virgin
 nnrel movwf Tx1d0
@@ -1421,7 +1423,7 @@ nnrel movwf Tx1d0
     movff NN_templ,Tx1d2
     movlw 3
     movwf Dlc
-    call  sendTX
+    call  TX_data
     return
 
 
@@ -1568,7 +1570,7 @@ ldely1  call  dely
 scan_init
     clrf  Sflag     ;Clear flags
     clrf  Ccount      ;Initialise column count
-    btfsc Mode0,1     ;Skip if SLiM
+    btfsc FLiM_MODE     ;Skip if SLiM
     return          ;Must be FLiM mode then
     movlw SCSWITCH    ;Set switch mode
     btfss Mode2,0     ;Skip if SLiM pushbutton mode
@@ -1784,7 +1786,7 @@ sendpkt btfsc Oflag,OFINIT  ;Skip if not first time through?
 sndpkt0 btfsc Sflag,SFSLIM1 ;Skip if not SLIM mode 1
     rrncf Index,F
     call  get_event   ;gets event from table into Tx1
-    btfsc Mode0,4     ;FLiM learn?
+    btfsc FLiM_LEARN     ;FLiM learn?
     goto  snd_inx     ;send event with index
     movf  Tx1d1,F
     bnz   long
@@ -1840,7 +1842,7 @@ sndpkt6 movlw B'00001111'   ;clear last priority
     iorwf Tx1sidh,F
     movlw 10
     movwf Latcount
-    goto  sendTX      ;send CAN frame and return
+    goto  TX_data      ;send CAN frame and return
 
 ;***************************************************************
 ;Process a start of day event
@@ -2133,7 +2135,7 @@ para1 tblrd*+
     bcf   EECON1,EEPGD
     movlw 8
     movwf Dlc
-    call  sendTXa
+    call  TX_data
     return
 
 ;**************************************************************************
@@ -2158,7 +2160,7 @@ name1 tblrd*+
     bcf   EECON1,EEPGD
     movlw 8
     movwf Dlc
-    call  sendTXa
+    call  TX_data
     return
 
 
@@ -2199,7 +2201,7 @@ addflags
     movff Rx0d3,Tx1d3
     movlw 5
     movwf Dlc
-    call  sendTXNN
+    call  TX_with_NN
     return
 
 numParams
@@ -2210,7 +2212,7 @@ numParams
     movff Rx0d3,Tx1d3
     movlw 5
     movwf Dlc
-    call  sendTXNN
+    call  TX_with_NN
     return
 
 pidxerr
@@ -2220,7 +2222,7 @@ pidxerr
 
 getflags    ; create flags byte
     movlw PF_PRODUCER
-    btfsc Mode0,1
+    btfsc FLiM_MODE
     iorlw 4   ; set bit 2
     movwf Temp
     bsf   Temp,3    ;set bit 3, we are bootable
@@ -2242,7 +2244,7 @@ whoami
     movwf Tx1d5
     movlw 6
     movwf Dlc
-    call  sendTXNN
+    call  TX_with_NN
     return
 
 
@@ -2253,7 +2255,7 @@ errsub  movwf Tx1d3   ;main eror message send. Error no. in WREG
     movwf Tx1d0
     movlw 4
     movwf Dlc
-    call  sendTX
+    call  TX_data
     return
 
 ;**********************************************************************
@@ -2293,7 +2295,7 @@ clr_en
     movlw 10
     movwf Latcount
 
-    call  sendTXa     ;send RTR frame
+    call  TX_data     ;send RTR frame
     clrf  Tx1dlc      ;prevent more RTR frames
 
 self_en1
@@ -2390,7 +2392,7 @@ learn1  tblrd*+       ;read into TABLAT and increment
     movf  POSTINC2,W      ;get old NN
     subwf Rx0d4,W
     bnz   new
-    btfsc Mode0,1       ;is it FLiM?
+    btfsc FLiM_MODE       ;is it FLiM?
     bra   new
     lfsr  FSR2,Flash_buf    ;here if same so undo it
     movf  ENtempl,W
@@ -2534,9 +2536,9 @@ fb1   lfsr  FSR2,Flash_buf
     movwf Count
 fb2
 #if J5_SHORT          ;Default to short events if FLiM mode and J5 in upper posn
-    btfss Mode0,1     ;Skip if FLiM?
+    btfss FLiM_MODE     ;Skip if FLiM?
     bra   fb2a      ;If SLiM
-    btfss M_INP  ;Check J5
+    btfss MODE_INP  ;Check J5
     bra   fb2a      ;Use defaults
     clrf  POSTINC2    ;Zero; use short event
     clrf  POSTINC2
@@ -2622,7 +2624,7 @@ read  movff Rx0d3,Index
     movff NN_temph,Tx1d1
     movlw 8
     movwf Dlc
-    call  sendTXa
+    call  TX_data
     return
 
 ;****************************************************************
@@ -2635,7 +2637,7 @@ wrack movlw OPC_WRACK   ;set up WRACK frame
     movff NN_templ,Tx1d2
     movlw 3
     movwf Dlc
-    call  sendTXa
+    call  TX_data
     return
 
 ;************************************************************************
