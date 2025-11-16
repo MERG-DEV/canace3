@@ -1324,8 +1324,8 @@ do1
 ;***************************************************************************
 ;   main setup routine
 ;*************************************************************************
-
-setup clrf  INTCON      ;no interrupts yet
+setup 
+    clrf  INTCON      ;no interrupts yet
     clrf  ADCON0      ;turn off A/D, all digital I/O
     movlw B'00001111'
     movwf ADCON1
@@ -1333,7 +1333,6 @@ setup clrf  INTCON      ;no interrupts yet
     ;port settings will be hardware dependent. RB2 and RB3 are for CAN.
     ;set S_PORT and S_BIT to correspond to port used for setup.
     ;rest are hardware options
-
 
     movlw B'00110000'   ;Port A 0 to 3 are column select, 4 is setup input
     movwf TRISA     ;
@@ -1367,7 +1366,7 @@ setup clrf  INTCON      ;no interrupts yet
     movlw B'00100100'
     movwf RXB0CON     ;enable double buffer of RX0
 
-;new code for extended frames bug fix
+    ; new code for extended frames bug fix
     movlb 15
     movlw B'00100000'   ;reject extended frames
     movwf RXB1CON
@@ -1375,12 +1374,14 @@ setup clrf  INTCON      ;no interrupts yet
     clrf  RXF1SIDL
     movlb 0
 
-mskload lfsr  0,RXM0SIDH    ;Clear masks, point to start
-mskloop clrf  POSTINC0
+mskload 
+    lfsr  0,RXM0SIDH    ;Clear masks, point to start
+
+mskloop 
+    clrf  POSTINC0
     movlw LOW RXM1EIDL+1    ;end of masks
     cpfseq  FSR0L
     bra   mskloop
-
 
     clrf  CANCON      ;out of CAN setup mode
     clrf  CCP1CON
@@ -1400,15 +1401,12 @@ mskloop clrf  POSTINC0
     movlw B'00000001'
     movwf PIE1      ;enable interrupt for timer 1
 
-
 ;next segment required
-
 
     movlw B'00000001'
     movwf IDcount     ;set at lowest value for starters
     clrf  INTCON2     ;
     clrf  INTCON3     ;
-
 
     movlw B'00100011'   ;B'00100011'Rx0 and RX1 interrupt and Tx error
 
@@ -1418,7 +1416,8 @@ mskloop clrf  POSTINC0
     clrf  PIR2
     clrf  Sflag
 
-no_load clrf  Mode2
+no_load 
+    clrf  Mode2
     btfsc MODE_INP  ;initialise SLiM mode for scan
     bsf   Mode2,0
 
@@ -1432,13 +1431,14 @@ no_load clrf  Mode2
     bnz   setid
     bra   slimset     ;set up in SLiM mode
 
-
-setid bsf   FLiM_MODE     ;flag FLiM
+setid 
+    bsf   FLiM_MODE     ;flag FLiM
     call  newid_f     ;put ID into Tx1buf, TXB2 and ID number store
 
 seten_f
     movlb 15
     bcf RXB1CON,RXFUL
+
     movlb 0
     bcf RXB0CON,RXFUL   ;ready for next
     bcf COMSTAT,RXB0OVFL  ;clear overflow flags if set
@@ -1453,7 +1453,8 @@ seten_f
     call  buf_init    ;and initialise buffers
     goto  main_loop
 
-slimset movlw B'00110000'   ;get DIP switch setting
+slimset 
+    movlw B'00110000'   ;get DIP switch setting
     andwf PORTB,W
     movwf Temp
     swapf Temp,W
@@ -1470,12 +1471,13 @@ slimset movlw B'00110000'   ;get DIP switch setting
     call  eeread
     subwf NN_templ,W
     bz    not_new
+
     movf  NN_templ,W
     call  eewrite
     call  clear_events
 
-not_new bcf   Mode0,0
-
+not_new 
+    bcf   Mode0,0
     bcf   FLiM_MODE     ;not FLiM
 
     movf  NN_templ,W
@@ -1485,14 +1487,16 @@ not_new bcf   Mode0,0
     call  eeread
     sublw 0
     bnz   seten     ;table already loaded
+
     call  clear_events
     call  wrack
 
 seten
     movlb 15
     bcf RXB1CON,RXFUL
+
     movlb 0
-    bcf RXB0CON,RXFUL   ;ready for next
+    bcf   RXB0CON,RXFUL   ;ready for next
     bcf COMSTAT,RXB0OVFL  ;clear overflow flags if set
     bcf COMSTAT,RXB1OVFL
     clrf  PIR3      ;clear all flags
@@ -1505,39 +1509,25 @@ seten
     goto  main_loop
 
 
+
 ;****************************************************************************
 ;   start of subroutines
+;****************************************************************************
 
+;****************************************************************************
+;   send a CAN frame
+;   Latcount is the number of CAN send retries before priority is increased
+;   the CAN-ID is pre-loaded in the Tx1 buffer
+;   Dlc must be loaded by calling source to the data length value
 
-
-;   Send contents of Tx1 buffer via CAN TXB1
-
-TX_frame lfsr  0,Tx1con
-    lfsr  1,TXB1CON
-
-    movlb 15       ;check for buffer access
-ldTx2 btfsc TXB1CON,TXREQ ; Tx buffer available...?
-    bra   ldTx2     ;...not yet
-    movlb 0
-
-ldTX1 movf  POSTINC0,W
-    movwf POSTINC1    ;load TXB1
-    movlw Tx1d7+1
-    cpfseq  FSR0L
-    bra   ldTX1
-    movlb 15       ;bank 15
-tx1test btfsc TXB1CON,TXREQ ;test if clear to send
-    bra   tx1test
-    bsf   TXB1CON,TXREQ ;OK so send
-
-tx1done movlb 0       ;bank 0
-    return          ;successful send
-
-
+; Entry at TX_with_NN puts the current NN in the frame - for producer events
 TX_with_NN
     movff NN_temph,Tx1d1
     movff NN_templ,Tx1d2
-TX_data movf  Dlc,W       ;get data length
+
+; Entry at TX_data neeeds Tx1d1 and Tx1d2 setting first
+TX_data 
+    movf  Dlc,W       ;get data length
     movwf Tx1dlc
     movlw B'00001111'   ;clear old priority
     andwf Tx1sidh,F
@@ -1545,26 +1535,60 @@ TX_data movf  Dlc,W       ;get data length
     iorwf Tx1sidh     ;low priority
     movlw 10
     movwf Latcount
-    call  TX_frame     ;send frame
-    return
+
+; Send contents of Tx1 buffer via CAN TXB1
+TX_frame 
+    lfsr  0,Tx1con
+    lfsr  1,TXB1CON
+
+    movlb 15       ;check for buffer access
+
+ldTx2 
+    btfsc TXB1CON,TXREQ ; Tx buffer available...?
+    bra   ldTx2     ;...not yet
+
+    movlb 0
+
+ldTX1 
+    movf  POSTINC0,W
+    movwf POSTINC1    ;load TXB1
+    movlw Tx1d7+1
+    cpfseq  FSR0L
+    bra   ldTX1
+
+    movlb 15       ;bank 15
+
+tx1test 
+    btfsc TXB1CON,TXREQ ;test if clear to send
+    bra   tx1test
+
+    bsf   TXB1CON,TXREQ ;OK so send
+
+tx1done 
+    movlb 0       ;bank 0
+    return          ;successful send
+
 
 
 ;*********************************************************************
 ;   put in NN from command
-
-putNN movff Rx0d1,NN_temph
+putNN 
+    movff Rx0d1,NN_temph
     movff Rx0d2,NN_templ
     movlw LOW NodeID
     movwf EEADR
     call  eeread
     subwf NN_temph,W
     bnz   notsame
+
     incf  EEADR
     call  eeread
     subwf NN_templ,W
     bnz   notsame
     bra   same
-notsame movlw LOW NodeID    ;only reload table if NN is changed
+
+notsame 
+    movlw LOW NodeID    ;only reload table if NN is changed
     movwf EEADR
     movf  Rx0d1,W
     call  eewrite
@@ -1573,15 +1597,18 @@ notsame movlw LOW NodeID    ;only reload table if NN is changed
     call  eewrite
     call  clear_events  ;create new FLASH lookup table
     call  wrack
-same  movlw Modstat
+
+same  
+    movlw Modstat
     movwf EEADR
     movlw B'00001000'   ;Module status has NN set
-    call  eewrite
-    return
+    goto  eewrite
+
+
 
 ;***********************************************************************
-
-putNNs  movlw LOW NodeID    ;put SLiM NN into EEPROM
+putNNs  
+    movlw LOW NodeID    ;put SLiM NN into EEPROM
     movwf EEADR
     movff Atemp,NN_templ
     movf  NN_temph,W
@@ -1592,14 +1619,13 @@ putNNs  movlw LOW NodeID    ;put SLiM NN into EEPROM
     movlw LOW CANid
     movwf EEADR
     movf  NN_templ,W
-    call  eewrite
-    return
+    goto  eewrite
+
+
 
 ;**************************************************************************
-
-
-
-newid1  movwf CanID_tmp
+newid1  
+    movwf CanID_tmp
     call  shuffle
     movlw B'11110000'
     andwf Tx1sidh
@@ -1607,9 +1633,13 @@ newid1  movwf CanID_tmp
     iorwf Tx1sidh     ;leave priority bits alone
     movf  IDtempl,W
     movwf Tx1sidl     ;only top three bits used
+
     movlb 15       ;put ID into TXB2 for enumeration response to RTR
-new_1 btfsc TXB2CON,TXREQ ;wait till sent
+
+new_1 
+    btfsc TXB2CON,TXREQ ;wait till sent
     bra   new_1
+
     clrf  TXB2SIDH
     movf  IDtemph,W
     movwf TXB2SIDH
@@ -1618,26 +1648,30 @@ new_1 btfsc TXB2CON,TXREQ ;wait till sent
     movlw 0xB0
     iorwf TXB2SIDH    ;set priority
     clrf  TXB2DLC     ;no data, no RTR
+
     movlb 0
-
     return
 
-nnack btfss FLiM_MODE     ;FLiM?
+;**************************************************************************
+nnack 
+    btfss FLiM_MODE     ;FLiM?
     return
+
     movlw OPC_RQNN    ;request frame for new NN or ack if not virgin
-nnrel movwf Tx1d0
+
+nnrel 
+    movwf Tx1d0
     movff NN_temph,Tx1d1
     movff NN_templ,Tx1d2
     movlw 3
     movwf Dlc
-    call  TX_data
-    return
+    goto  TX_data
+
 
 
 ;**********************************************************************
-
-
-newid_f   movlw LOW CANid     ;put in stored ID. FLiM mode
+newid_f   
+    movlw LOW CANid     ;put in stored ID. FLiM mode
     movwf EEADR
     bsf   EECON1,RD
     movf  EEDATA,W
@@ -1658,8 +1692,11 @@ newid_f   movlw LOW CANid     ;put in stored ID. FLiM mode
     movwf NN_templ
 
     movlb 15       ;put ID into TXB2 for enumeration response to RTR
-new_1f  btfsc TXB2CON,TXREQ
+
+new_1f  
+    btfsc TXB2CON,TXREQ
     bra   new_1f
+
     clrf  TXB2SIDH
     movf  IDtemph,W
     movwf TXB2SIDH
@@ -1668,16 +1705,16 @@ new_1f  btfsc TXB2CON,TXREQ
     movlw 0xB0
     iorwf TXB2SIDH    ;set priority
     clrf  TXB2DLC     ;no data, no RTR
-    movlb 0
 
+    movlb 0
     return
 
 
 
 ;*****************************************************************************
-;
-;   shuffle for standard ID. Puts 8 bit ID into IDtemph and IDtempl for CAN frame
-shuffle movf  CanID_tmp,W
+; Shuffle for standard ID. Puts 8 bit ID into IDtemph and IDtempl for CAN frame
+shuffle 
+    movf  CanID_tmp,W
     movwf IDtempl   ;get 8 bit ID
     swapf IDtempl,F
     rlncf IDtempl,W
@@ -1690,13 +1727,15 @@ shuffle movf  CanID_tmp,W
     rrncf IDtemph,W
     andlw B'00001111'
     movwf IDtemph         ;has sidh
+
     return
 
-;*********************************************************************************
 
-;   reverse shuffle for incoming ID. sidh and sidl into one byte.
 
-shuffin movff Rx0sidl,IDtempl
+;******************************************************************************
+; Reverse shuffle for incoming ID. sidh and sidl into one byte.
+shuffin 
+    movff Rx0sidl,IDtempl
     swapf IDtempl,F
     rrncf IDtempl,W
     andlw B'00000111'
@@ -1707,29 +1746,39 @@ shuffin movff Rx0sidl,IDtempl
     rlncf IDtemph,W
     andlw B'01111000'
     iorwf IDtempl,W     ;returns with ID in W
+
     return
 
-;************************************************************************************
-;
-eeread  bcf   EECON1,EEPGD  ;read a EEPROM byte, EEADR must be set before this sub.
+
+
+;******************************************************************************
+eeread  
+    bcf   EECON1,EEPGD  ;read a EEPROM byte, EEADR must be set before this sub.
     bcf   EECON1,CFGS
     bsf   EECON1,RD
     movf  EEDATA,W
+
     return
+
+
 
 ;**************************************************************************
 ;Write a byte to eeprom IF it's changed
 ;Entry: EEADR=Eeprom Address, W=Byte to write
-eesave  movwf EEtemp      ;Save data
+eesave  
+    movwf EEtemp      ;Save data
     call  eeread      ;Read data
     cpfseq  EEtemp      ;Skip if same
     bra   eesav1      ;Write eeprom
+
     return
 
-eesav1  movf  EEtemp,W    ;Get byte
+eesav1  
+    movf  EEtemp,W    ;Get byte
 
 ;**************************************************************************
-eewrite movwf EEDATA      ;write to EEPROM, EEADR must be set before this sub.
+eewrite 
+    movwf EEDATA      ;write to EEPROM, EEADR must be set before this sub.
     bcf   EECON1,EEPGD
     bcf   EECON1,CFGS
     bsf   EECON1,WREN
@@ -1740,8 +1789,11 @@ eewrite movwf EEDATA      ;write to EEPROM, EEADR must be set before this sub.
     movlw 0xAA
     movwf EECON2
     bsf   EECON1,WR
-eetest  btfsc EECON1,WR
+
+eetest  
+    btfsc EECON1,WR
     bra   eetest
+
     bcf   PIR2,EEIF
     bcf   EECON1,WREN
 
@@ -1750,27 +1802,41 @@ eetest  btfsc EECON1,WR
     return
 
 
+
 ;*********************************************************
 ;   a delay routine
-
-dely  movlw 10
+dely  
+    movlw 10
     movwf Dcount1
-dely2 clrf  Dcount
-dely1 decfsz  Dcount,F
+
+dely2 
+    clrf  Dcount
+
+dely1 
+    decfsz  Dcount,F
     goto  dely1
+
     decfsz  Dcount1
     bra   dely2
+
     return
+
+
 
 ;************************************************************************
 ;   longer delay
-
-ldely movlw 100
+ldely 
+    movlw 100
     movwf Count2
-ldely1  call  dely
+
+ldely1  
+    call  dely
     decfsz  Count2
     bra   ldely1
+
     return
+
+
 
 ;******************************************************************
 ; Initialise scan modes
@@ -1779,12 +1845,16 @@ scan_init
     clrf  Ccount      ;Initialise column count
     btfsc FLiM_MODE     ;Skip if SLiM
     return          ;Must be FLiM mode then
+
     movlw SCSWITCH    ;Set switch mode
     btfss Mode2,0     ;Skip if SLiM pushbutton mode
     bra   scini1      ;Set switch mode
+
     movlw (1 << SCPBPAIR) ;Pushbutton pair mode
     bsf   Sflag,SFSLIM1 ;Flag SLiM mode 1
-scini1  movwf ScMode0
+
+scini1  
+    movwf ScMode0
     movwf ScMode1
     movwf ScMode2
     movwf ScMode3
@@ -1792,6 +1862,7 @@ scini1  movwf ScMode0
     movwf ScMode5
     movwf ScMode6
     movwf ScMode7
+
     return
 
 
@@ -1821,7 +1892,8 @@ scini1  movwf ScMode0
 ; 14    56  57  58  59    120 121 122 123
 ; 15    60  61  62  63    124 125 126 127
 
-scansw  bcf   Sflag,SFNSCAN ;Clear scan flag
+scansw  
+    bcf   Sflag,SFNSCAN ;Clear scan flag
     movf  PORTC,W     ;Read row data
     movwf Row       ;Save row data, Each bit is 0 if switch closed
     lfsr  FSR0,Buffer0  ;point to buffer
@@ -1831,22 +1903,29 @@ scansw  bcf   Sflag,SFNSCAN ;Clear scan flag
     movf  INDF0,W     ;get old row
     xorwf Row,W     ;compare with new
     bz    scan5     ;no change
+
     ;One or more switch inputs on this column has changed state
     movwf Bitcng      ;hold the bit change(s)
     movff Row,INDF0   ;Save this state
     clrf  Bitcnt      ;Count bits from 0..7
     movlw B'00000001'
     movwf Bitmask     ;Initialise bit mask
-scan2 rrcf  Bitcng,F    ;rotate to find which bit changed
+
+scan2 
+    rrcf  Bitcng,F    ;rotate to find which bit changed
     bnc   scan4     ;no change
+
     ;A bit has changed state, update OnOff flag
     bcf   Sflag,SFONOFF ;Clear OnOff flag
     movf  Row,W     ;Get this state
     andwf Bitmask,W   ;Mask
     bnz   scan3     ;Now OFF (high)
+
     bsf   Sflag,SFONOFF ;Set ON if switch low
+
     ;Calculate switch number (0..127)
-scan3 movf  Ccount,W    ;Get column count (0..15)
+scan3 
+    movf  Ccount,W    ;Get column count (0..15)
     andlw 0x0F      ;keep in range
     addwf WREG,W      ;*2
     addwf WREG,W      ;*4
@@ -1864,24 +1943,33 @@ scan3 movf  Ccount,W    ;Get column count (0..15)
     btfss Lockout,0   ;Skip if lockout enabled
     bcf   ScMode,SCLOCKOUT;Lockout not enabled, clear flag
     call  schange     ;Process changed switch
-scan4 rlncf Bitmask,F   ;Move mask
+
+scan4 
+    rlncf Bitmask,F   ;Move mask
     incf  Bitcnt,F    ;Increment count
     btfss Bitcnt,3    ;Skip if done eight bits
     bra   scan2     ;No, keep going
-scan5 incf  Ccount,F    ;Next column
+
+scan5 
+    incf  Ccount,F    ;Next column
     movf  Ccount,W    ;Get column count
     andlw 0x0F      ;Mask crud
     movwf COL_PORT  ;Send it to the 1:16 decoder to select a column
     movf  Ccount,W    ;Get column count again
     bz    sodgen      ;Check for SOD generation
+
     return          ;finish scan
+
+
 
 ;******************************************************************
 ;Process SOD generation. Called every 16*SCANTM mS
 ;******************************************************************
-sodgen  bcf   Oflag,OFINIT  ;Clear init flag
+sodgen  
+    bcf   Oflag,OFINIT  ;Clear init flag
     movf  SodMode,W   ;Get SOD mode
     bz    sodgenx     ;Nothing to do
+
     andlw SODTIME     ;Mask out time
 #if SCANTM * 16 == 500000
     addwf WREG,W      ;*2 to get units of 500mS
@@ -1893,25 +1981,36 @@ sodgen  bcf   Oflag,OFINIT  ;Clear init flag
     incf  SodCnt,F    ;Increment counter
     cpfsgt  SodCnt      ;Skip if time expired
     return          ;Not expired, return
+
     clrf  SodCnt    ;Reset counter
     btfss SodMode,SODGN1  ;Skip if SOD ON
     bra   sodoff      ;Do SOD OFF
+ 
     bcf   SodMode,SODGN1  ;Clear flag so ON event only sent once
     bsf   Sflag,SFONOFF ;Set On/Off flag
     call  sodsnd      ;and send
     call  dely      ;wait a while
     bra   do_sod      ;send any of our SOD stuff
 
-sodoff  btfss SodMode,SODGN0  ;Skip if Generate OFF event
+sodoff  
+    btfss SodMode,SODGN0  ;Skip if Generate OFF event
     bra   sodclr      ;No, all done then
+
     bcf   Sflag,SFONOFF ;Clear On/Off flag
     call  sodsnd      ;send
-sodclr  clrf  SodMode     ;All done
-sodgenx return
 
-sodsnd  movlw SODSW     ;Get 'switch' number for SOD event
+sodclr  
+    clrf  SodMode     ;All done
+
+sodgenx 
+    return
+
+sodsnd  
+    movlw SODSW     ;Get 'switch' number for SOD event
     movwf Index     ;Save in Index
     goto  sendpkt     ;Send event
+
+
 
 ;******************************************************************
 ;Process changed switch
@@ -1920,13 +2019,16 @@ sodsnd  movlw SODSW     ;Get 'switch' number for SOD event
 ;Ccount = Column Number (0..15)
 ;Sflag.SFONOFF = Switch State (1 = On)
 ;ScMode = Scan Mode
-
-schange btfsc ScMode,SCPBPAIR ;Skip if NOT Pushbutton Pair mode?
+schange 
+    btfsc ScMode,SCPBPAIR ;Skip if NOT Pushbutton Pair mode?
     bra   chpair      ;Process Pushbutton Pair mode
+
     btfsc ScMode,SCPBTOGG ;Skip if NOT Pushbutton Toggle mode?
     bra   chtogg      ;Process Pushbutton Toggle mode
+
     btfsc ScMode,SCPBTOGN ;Skip if NOT Pushbutton Toggle with no monitor mode?
     bra   chtogg      ;Process Pushbutton Toggle mode
+
     ;Normal key; update state
     lfsr  FSR0,Switch_State;Point to switch states
     movf  Index,W     ;Get switch number
@@ -1934,16 +2036,20 @@ schange btfsc ScMode,SCPBPAIR ;Skip if NOT Pushbutton Pair mode?
     bcf   INDF0,SS_STATE  ;Clear state
     btfsc Sflag,SFONOFF ;Skip if switch off
     bsf   INDF0,SS_STATE  ;Set state
+
     ;Only send new state if block isn't locked out
     btfss ScMode,SCLOCKOUT;Skip if lockout enabled
     bra   sendpkt     ;and send packet out
     return
 
     ;Pushbutton Toggle mode - each push sends ON or OFF state
-chtogg  btfsc ScMode,SCLOCKOUT;Skip if no lockout
+chtogg  
+    btfsc ScMode,SCLOCKOUT;Skip if no lockout
     return          ;Locked out, ignore
+
     btfss Sflag,SFONOFF ;Skip if switch ON
     return          ;OFF: Nothing to do then
+
     ;Pushbutton toggle switch has been pushed ON
     lfsr  FSR0,Switch_State;Point to toggle states
     movf  Index,W     ;Get switch number
@@ -1955,79 +2061,106 @@ chtogg  btfsc ScMode,SCLOCKOUT;Skip if no lockout
     bra   sendpkt
 
     ;Pairs have first row as ON, second row as OFF
-chpair  btfsc ScMode,SCLOCKOUT;Skip if no lockout
+chpair  
+    btfsc ScMode,SCLOCKOUT;Skip if no lockout
     return          ;Locked out, ignore
+
     btfss Sflag,SFONOFF ;Skip if switch ON
     return          ;OFF: Nothing to do then
+
     bcf   Sflag,SFONOFF ;Set OFF
     btfss Index,0     ;Skip if off switch
     bsf   Sflag,SFONOFF ;Set ON
+
     bcf   Index,0     ;Clear LSB
 
     ;Send switch number 'Index', state in Sflag.SFONOFF
-sendpkt btfsc Oflag,OFINIT  ;Skip if not first time through?
+sendpkt 
+    btfsc Oflag,OFINIT  ;Skip if not first time through?
     return          ;Don't send changes
+
     btfss Mode0,2     ;is it learn mode?
     bra   sndpkt0
+
     bsf   Mode0,3     ;has got button push
+
     return          ;yes so don't send
 
     ;In SLiM Mode 1, we have to 'halve' the switch number
     ;to retain compatibility with existing systems
-sndpkt0 btfsc Sflag,SFSLIM1 ;Skip if not SLIM mode 1
+sndpkt0 
+    btfsc Sflag,SFSLIM1 ;Skip if not SLIM mode 1
     rrncf Index,F
     call  get_event   ;gets event from table into Tx1
     btfsc FLiM_LEARN     ;FLiM learn?
     goto  snd_inx     ;send event with index
+
     movf  Tx1d1,F
     bnz   long
+
     movf  Tx1d2,F
     bnz   long
 
     btfss Sflag,SFONOFF ;which direction?
     bra   short0
+
     ;Short ON event
     btfsc ScMode,SCOFFONLY;Skip if NOT off only
     return          ;Ignore
+
     movlw OPC_ASON    ;set command
     movwf Tx1d0
     bra   sndpkt4
 
     ;Short OFF event
-short0  btfsc ScMode,SCONONLY ;Skip if NOT on only
+short0  
+    btfsc ScMode,SCONONLY ;Skip if NOT on only
     return          ;Ignore
+
     movlw OPC_ASOF    ;unset command
     movwf Tx1d0     ;put in CAN frame
-sndpkt4 movlw 5
+
+sndpkt4 
+    movlw 5
     movwf Dlc       ;5 byte command
     movff NN_temph,Tx1d1  ;put in node NN for traceability
     movff NN_templ,Tx1d2
     bra   sndpkt6
 
-long  btfss Sflag,SFONOFF ;which direction?
+long  
+    btfss Sflag,SFONOFF ;which direction?
     bra   long0
+
     ;Long ON event
     btfsc ScMode,SCOFFONLY;Skip if NOT off only
     return          ;Ignore
+
     movlw OPC_ACON    ;set command
     bra   sndpkt1
 
     ;Long OFF event
-long0 btfsc ScMode,SCONONLY ;Skip if NOT on only
+long0 
+    btfsc ScMode,SCONONLY ;Skip if NOT on only
     return          ;Ignore
+
     movlw OPC_ACOF    ;unset command
-sndpkt1 movwf Tx1d0     ;put in CAN frame
+
+sndpkt1 
+    movwf Tx1d0     ;put in CAN frame
     bra   sndpkt4
 
     ;Send event with index
-snd_inx movlw OPC_ACON1
+snd_inx 
+    movlw OPC_ACON1
     movwf Tx1d0     ;event with data byte
     movff Index,Tx1d5   ;get index
     incf  Tx1d5,F     ;pointno is index +1
     movlw 6
     movwf Dlc
+
     ;Send event
-sndpkt6 movlw B'00001111'   ;clear last priority
+sndpkt6 
+    movlw B'00001111'   ;clear last priority
     andwf Tx1sidh,F
     movlw B'10110000'   ;starting priority
     iorwf Tx1sidh,F
@@ -2035,11 +2168,15 @@ sndpkt6 movlw B'00001111'   ;clear last priority
     movwf Latcount
     goto  TX_data      ;send CAN frame and return
 
+
+
 ;***************************************************************
 ;Process a start of day event
+do_sod  
+    clrf  Index     ;Start at switch zero
 
-do_sod  clrf  Index     ;Start at switch zero
-do_sod1 movf  Index,W     ;Get switch number
+do_sod1 
+    movf  Index,W     ;Get switch number
     lfsr  FSR1,Switch_State;Point to toggle states
     addwf FSR1L,F     ;FSR1 now points to state
     swapf WREG,W      ;Swap nibbles
@@ -2048,38 +2185,53 @@ do_sod1 movf  Index,W     ;Get switch number
     addwf FSR0L,F     ;FSR0 now points to right mode
     btfss INDF0,SCLOCKOUT ;Skip if Lockout block
     bra   do_sodx     ;Ignore
+
     btfsc Lockout,0   ;Skip if lockout not enabled
     bra   do_sod3     ;Ignore
-do_sodx btfsc INDF0,SCPBPAIR  ;Skip if not Pushbutton pair
+
+do_sodx 
+    btfsc INDF0,SCPBPAIR  ;Skip if not Pushbutton pair
     bra   do_sod3     ;Ignore
+
     btfsc INDF0,SCPBTOGG  ;Skip if not Pushbutton toggle
     bra   do_sod2     ;Process
+
     btfsc INDF0,SCPBTOGN  ;Skip if not Pushbutton toggle
     bra   do_sod2     ;Process
+
     btfss INDF0,SCSOD   ;Skip if not SOD
     bra   do_sod3     ;Ignore
+
     bcf   Sflag,SFONOFF ;Clear state
     btfsc INDF1,SS_STATE  ;Skip if switch off
     bsf   Sflag,SFONOFF ;Set state
+
     call  sendpkt     ;Send state out
     call  dely      ;Wait a while
     bra   do_sod3     ;and do next switch
 
 ;Process pushbutton toggle switch
-do_sod2 bcf   INDF1,SS_STATE  ;Set state off
+do_sod2 
+    bcf   INDF1,SS_STATE  ;Set state off
 
 ;Select next switch
-do_sod3 incf  Index,F     ;Next switch
+do_sod3 
+    incf  Index,F     ;Next switch
     btfss Index,7     ;Got to 128?
     bra   do_sod1     ;No, do next
+
     return          ;All done
+
+
 
 ;********************************************************************
 ; initialise matrix buffer
 
-buf_init clrf Ccount      ;column count
+buf_init 
+    clrf Ccount      ;column count
     lfsr  FSR0,Buffer0
-inscan1 movlw B'00001111'
+inscan1 
+    movlw B'00001111'
     andwf Ccount,F
     movf  Ccount,W
     movwf COL_PORT  ;set columns
@@ -2089,18 +2241,24 @@ inscan1 movlw B'00001111'
     movwf POSTINC0    ;Save row data & increment
     btfss Ccount,4    ;more than 15?
     bra   inscan1     ;next column
+
                 ;finish scan
     ; Clear toggle memory
     movlw 128      ;128 bytes to clear
     lfsr  FSR0,Switch_State;Point to state
-inscan3 clrf  POSTINC0    ;clear toggle state
+
+inscan3 
+    clrf  POSTINC0    ;clear toggle state
     decfsz  WREG,W      ;drop count, skip if 0
     bra   inscan3     ;next column
 
     clrf  Ccount      ;column count
     bcf   Sflag,SFNSCAN ;Clear scan flag
     bsf   Oflag,OFINIT  ;Set init flag
+
     return
+
+
 
 ;********************************************************************
 ; Build monitor table
@@ -2111,21 +2269,30 @@ moni_build
     lfsr  FSR0,Moni_Table ;Point to table
     clrf  Index     ;Clear index
     movlw 0xFF      ;Initial value
-monib1  movwf POSTINC0    ;Store 0xFF, increment FSR
+
+monib1  
+    movwf POSTINC0    ;Store 0xFF, increment FSR
     decfsz  Index,F     ;Decrement count, skip if zero
     bra   monib1      ;Loop
+
     ; Now see which switches to monitor
     clrf  Index     ;Clear switch number
     lfsr  FSR0,ScMode0  ;Point to scan modes
-monib2  btfsc INDF0,SCPBTOGG  ;Skip if not toggle monitor mode
+
+monib2  
+    btfsc INDF0,SCPBTOGG  ;Skip if not toggle monitor mode
     bra   monib3      ;Do next
-monibx  movlw 16       ;16 switches per block
+
+monibx  
+    movlw 16       ;16 switches per block
     addwf Index,F     ;Advance index
     bra   monib4      ;and loop
 
-monib3  call  get_event   ;Get event for this switch into Tx1d3/Tx1d4
+monib3  
+    call  get_event   ;Get event for this switch into Tx1d3/Tx1d4
     movf  Tx1d3,W     ;Get high event number
     bnz   monib4      ;Not zero, can't use this
+
     lfsr  FSR1,Moni_Table ;Point to table
     movf  Tx1d4,W     ;Get low event number into W
     addwf FSR1L,F     ;Add it to table pointer
@@ -2134,10 +2301,15 @@ monib3  call  get_event   ;Get event for this switch into Tx1d3/Tx1d4
     movf  Index,W     ;Get index
     andlw 0x0F      ;Done 16 yet?
     bnz   monib3      ;No, do next switch
-monib4  incf  FSR0L,F     ;Point to next block
+
+monib4  
+    incf  FSR0L,F     ;Point to next block
     btfss Index,7     ;Skip if done 128 switches
     bra   monib2      ;Do next
+
     return          ;finish scan
+
+
 
 ;***************************************************************************
 ;Process incoming event
@@ -2147,75 +2319,80 @@ monib4  incf  FSR0L,F     ;Point to next block
 ;Rx0d3 = Event High
 ;Rx0d4 = Event Low
 ; to update internal state of any "Pushbutton Toggle" switches
-
 do_event
     btg   Rx0d0,0     ;Now 1=ON, 0=OFF
 
 ;***************************************************************
 ;Check for incoming lockout event
-
     movlw LOCKSW      ;Get lockout 'switch' number
     call  set_tblptr    ;Set TBLPTR registers from W
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Node number hi
     cpfseq  Rx0d1     ;Skip if match
     bra   dosev1      ;No match
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Node number lo
     cpfseq  Rx0d2     ;Skip if match
     bra   dosev1      ;No match
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Event number hi
     cpfseq  Rx0d3     ;Skip if match
     bra   dosev1      ;No match
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Event number lo
     cpfseq  Rx0d4     ;Skip if match
     bra   dosev1      ;No match
+
     ;This is the lockout event
     movff Rx0d0,Lockout ;Update lockout flag with ON/OFF state
     call  lock_save   ;Save state in eeproom
-#if 1 ; I'm not convinced that one event should do more than one thing
     return          ;and finish here
-#endif
-dosev1
 
+dosev1
 ;***************************************************************
 ;Check for incoming Start of Day event
-
     btfss Rx0d0,0     ;Skip if ON event
     bra   dosev2      ;Ignore if OFF
+
     movlw SODSW     ;Get Start of Day 'switch' number
     call  set_tblptr    ;Set TBLPTR registers from W
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Node number hi
     cpfseq  Rx0d1     ;Skip if match
     bra   dosev2      ;No match
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Node number lo
     cpfseq  Rx0d2     ;Skip if match
     bra   dosev2      ;No match
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Event number hi
     cpfseq  Rx0d3     ;Skip if match
     bra   dosev2      ;No match
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Event number lo
     cpfseq  Rx0d4     ;Skip if match
     bra   dosev2      ;No match
+
     ;This is the Start of Day event
     goto  do_sod      ;Do start of day
 dosev2
-
 ;***************************************************************
 ;Check for monitor event
     movf  Rx0d3,F     ;Is high byte of event non-zero ?
     bnz   dosev3      ;No, exit
+
     lfsr  FSR0,Moni_Table ;Point to monitor table
     movf  Rx0d4,W     ;Get low event number
     addwf FSR0L,F     ;Add to FSR0
     btfsc INDF0,7     ;Skip if switch 0..127
     bnz   dosev3      ;No, exit
+
     movf  INDF0,W     ;Get switch number for event (0..127)
     ;Get event from flash table to check the node number matches
     call  set_tblptr    ;Set TBLPTR registers to W
@@ -2223,10 +2400,12 @@ dosev2
     movf  TABLAT,W    ;Get node number hi
     cpfseq  Rx0d1     ;Skip if match
     bnz   dosev3      ;No, exit
+
     tblrd*+         ;read into TABLAT and increment
     movf  TABLAT,W    ;Get Node number lo
     cpfseq  Rx0d2     ;Skip if match
     bnz   dosev3      ;No, exit
+
     ; Only monitored pushbutton toggle switches will be in the Moni_Table
     ; so if we get this far, we know that this is to be changed
     ; The switch number (0..127) is in Index
@@ -2235,16 +2414,18 @@ dosev2
     addwf FSR0L,F     ;Add offset so FSR0 points to state
     btfsc Rx0d0,0     ;Skip if OFF command
     bra   monie3
+
     ;OFF Command
     bcf   INDF0,SS_STATE  ;Set toggle state
     return
 
     ;ON Command
-monie3  bsf   INDF0,SS_STATE  ;Set toggle state
-    return
+monie3  
+    bsf   INDF0,SS_STATE  ;Set toggle state
 
 dosev3
     return
+
 
 
 ;***************************************************************
@@ -2291,22 +2472,28 @@ loadnv  movlw LOW NVstart
     call  scan_init     ;do rest of scan initialisation
     goto  moni_build      ;build monitor table
 
+
+
 ;**************************************************************************
-
 ;   check if command is for this node
-
-thisNN  movf  NN_temph,W
+thisNN  
+    movf  NN_temph,W
     subwf Rx0d1,W
     bnz   not_NN
+
     movf  NN_templ,W
     subwf Rx0d2,W
     bnz   not_NN
+
     retlw   0     ;returns 0 if match
-not_NN  retlw 1
+
+not_NN  
+    retlw 1
+
+
 
 ;************************************************************
 ;   send node parameter bytes (7 maximum)
-
 parasend
     movlw OPC_PARAMS
     movwf Tx1d0
@@ -2319,19 +2506,21 @@ parasend
     movwf Count
     bsf   EECON1,EEPGD
 
-para1 tblrd*+
+para1 
+    tblrd*+
     movff TABLAT,POSTINC0
     decfsz  Count
     bra   para1
+
     bcf   EECON1,EEPGD
     movlw 8
     movwf Dlc
-    call  TX_data
-    return
+    goto  TX_data
+
+
 
 ;**************************************************************************
 ;   send module name - 7 bytes
-
 namesend
     movlw OPC_NAME
     movwf Tx1d0
@@ -2344,39 +2533,44 @@ namesend
     movwf Count
     bsf   EECON1,EEPGD
 
-name1 tblrd*+
+name1 
+    tblrd*+
     movff TABLAT,POSTINC0
     decfsz  Count
     bra   name1
+
     bcf   EECON1,EEPGD
     movlw 8
     movwf Dlc
-    call  TX_data
-    return
+    goto  TX_data
+
+
 
 
 ;**********************************************************
-
 ;   send individual parameter
-
 ;   Index 0 sends no of parameters
-
-para1rd movf  Rx0d3,w
+para1rd 
+    movf  Rx0d3,w
     sublw 0
     bz    numParams
+
     movlw PRMCOUNT
     movff Rx0d3, Temp
     decf  Temp
     cpfslt  Temp
     bra   pidxerr
+
     movlw OPC_PARAN
     movwf Tx1d0
     movlw 7   ;FLAGS index in nodeprm
     cpfseq  Temp
     bra   notFlags
+
     call  getflags
     movwf Tx1d4
     bra   addflags
+
 notFlags
     movlw LOW nodeprm
     movwf TBLPTRL
@@ -2388,12 +2582,12 @@ notFlags
     bsf   EECON1,EEPGD
     tblrd*
     movff TABLAT,Tx1d4
+
 addflags
     movff Rx0d3,Tx1d3
     movlw 5
     movwf Dlc
-    call  TX_with_NN
-    return
+    goto  TX_with_NN
 
 numParams
     movlw OPC_PARAN
@@ -2403,13 +2597,11 @@ numParams
     movff Rx0d3,Tx1d3
     movlw 5
     movwf Dlc
-    call  TX_with_NN
-    return
+    goto  TX_with_NN
 
 pidxerr
     movlw 10
-    call  errsub
-    return
+    goto  errsub
 
 getflags    ; create flags byte
     movlw PF_PRODUCER
@@ -2418,11 +2610,13 @@ getflags    ; create flags byte
     movwf Temp
     bsf   Temp,3    ;set bit 3, we are bootable
     movf  Temp,w
-    return
+ 
+   return
+
+
 
 ;**********************************************************
 ; returns Node Number, Manufacturer Id, Module Id and Flags
-
 whoami
     call  ldely   ;wait for other nodes
     movlw OPC_PNN
@@ -2435,27 +2629,27 @@ whoami
     movwf Tx1d5
     movlw 6
     movwf Dlc
-    call  TX_with_NN
-    return
+    goto  TX_with_NN
+
 
 
 ;*************************************************************************
-
-errsub  movwf Tx1d3   ;main eror message send. Error no. in WREG
+errsub  
+    movwf Tx1d3   ;main eror message send. Error no. in WREG
     movlw OPC_CMDERR
     movwf Tx1d0
     movlw 4
     movwf Dlc
-    call  TX_data
-    return
+    goto  TX_data
+
 
 ;**********************************************************************
-;
 ;   self enumeration as separate subroutine
 self_enA
     bcf   Datmode,MD_IDCONF     ;clear calling flag
 
-self_en movff FSR1L,Fsr_tmp1Le  ;save FSR1 just in case
+self_en 
+    movff FSR1L,Fsr_tmp1Le  ;save FSR1 just in case
     movff FSR1H,Fsr_tmp1He
     movlw B'11000000'
     movwf INTCON      ;start interrupts if not already started
@@ -2464,6 +2658,7 @@ self_en movff FSR1L,Fsr_tmp1Le  ;save FSR1 just in case
     movlw 14
     movwf Count
     lfsr  FSR0, Enum0
+
 clr_en
     clrf  POSTINC0
     decfsz  Count
@@ -2492,6 +2687,7 @@ clr_en
 self_en1
     btfss PIR2,TMR3IF   ;setup timer out?
     bra   self_en1      ;fast loop till timer out
+
     bcf   T3CON,TMR3ON  ;timer off
     bcf   PIR2,TMR3IF   ;clear flag
     clrf  IDcount
@@ -2499,38 +2695,50 @@ self_en1
     clrf  Roll
     bsf   Roll,0
     lfsr  FSR1,Enum0      ;set FSR to start
-here1 incf  INDF1,W       ;find a space
+
+here1 
+    incf  INDF1,W       ;find a space
     bnz   here
+
     movlw 8
     addwf IDcount,F
     incf  FSR1L
     bra   here1
-here  movf  Roll,W
+
+here  
+    movf  Roll,W
     andwf INDF1,W
     bz    here2
+
     rlcf  Roll,F
     incf  IDcount,F
     bra   here
-here2 movlw 100        ;limit to ID
+
+here2 
+    movlw 100        ;limit to ID
     cpfslt  IDcount
     bra   segful        ;segment full
 
-here3 movlw LOW CANid   ;put new ID in EEPROM
+here3 
+    movlw LOW CANid   ;put new ID in EEPROM
     movwf EEADR
     movf  IDcount,W
     call  eewrite
     call  newid_f     ;put new ID in various buffers
 
-
     movff Fsr_tmp1Le,FSR1L  ;
     movff Fsr_tmp1He,FSR1H
+
     return
 
-segful  movlw 7   ;segment full, no CAN_ID allocated
+segful  
+    movlw 7   ;segment full, no CAN_ID allocated
     call  errsub
     setf  IDcount
     bcf   IDcount,7
     bra   here3
+
+
 
 ;*************************************************************************
 ; Learn an event for 'Index' (0..255)
@@ -2539,7 +2747,6 @@ segful  movlw 7   ;segment full, no CAN_ID allocated
 ; Rx0d3 = Event Number High
 ; Rx0d4 = Event Number Low
 ; Uses ENtempl,ENtemph,NN_templ,NN_temph
-
 learn_event
     movff Index,ENtempl   ;Index for table is base 0
     clrf  ENtemph
@@ -2560,7 +2767,8 @@ learn_event
     lfsr  FSR2,Flash_buf    ;point to holding buffer
     clrf  TBLPTRU
 
-learn1  tblrd*+       ;read into TABLAT and increment
+learn1  
+    tblrd*+       ;read into TABLAT and increment
     movf  TABLAT,W
     movwf POSTINC2
     decfsz  Flcount
@@ -2574,17 +2782,22 @@ learn1  tblrd*+       ;read into TABLAT and increment
     movf  POSTINC2,W      ;get old NN
     subwf Rx0d1,W
     bnz   new
+
     movf  POSTINC2,W      ;get old NN
     subwf Rx0d2,W
     bnz   new
+
     movf  POSTINC2,W      ;get old NN
     subwf Rx0d3,W
     bnz   new
+
     movf  POSTINC2,W      ;get old NN
     subwf Rx0d4,W
     bnz   new
+
     btfsc FLiM_MODE       ;is it FLiM?
     bra   new
+
     lfsr  FSR2,Flash_buf    ;here if same so undo it
     movf  ENtempl,W
     andlw B'00111111'     ;64 byte range
@@ -2596,7 +2809,8 @@ learn1  tblrd*+       ;read into TABLAT and increment
     movwf POSTINC2
     bra   new1
 
-new   lfsr  FSR2,Flash_buf
+new   
+    lfsr  FSR2,Flash_buf
     movf  ENtempl,W
     andlw B'00111111'     ;64 byte range
 
@@ -2607,7 +2821,8 @@ new   lfsr  FSR2,Flash_buf
     movff Rx0d3,POSTINC2    ;ee hi
     movff Rx0d4,POSTINC2    ;ee lo
 
-new1  call  event_erase     ;erase block
+new1  
+    call  event_erase     ;erase block
     movf  ENtempl,W     ;point to start of block rewrite
     movwf TBLPTRL
     movf  ENtemph,W
@@ -2616,11 +2831,12 @@ new1  call  event_erase     ;erase block
     call  f_write       ;write buffer back
     goto  moni_build      ;rebuild monitor table
 
+
+
 ;***************************************************
 ;   Erase a page (64 bytes) of flash in the Event_Table
 ;   ENtemph/ENtempl contains index into Event_Table
 ;   TBLPTRU is assumed to be zero
-
 event_erase
     movf  ENtempl,W     ;point to start of block to erase
     movwf TBLPTRL
@@ -2638,32 +2854,41 @@ event_erase
     movlw 0xAA
     movwf EECON2
     bsf   EECON1,WR     ;erase
-er_done btfsc EECON1,WR     ;check erase is done
+
+er_done 
+    btfsc EECON1,WR     ;check erase is done
     bra   er_done       ;Added v2g
     movlw B'11000000'
     movwf INTCON        ;reenable interrupts
+
     return
 
-;*********************************************************************
 
+
+;*********************************************************************
 ;   write flash buffer to flash
 ;   set table pointer first
-
-f_write movlw B'11000000'
+f_write 
+    movlw B'11000000'
     andwf TBLPTRL,F     ;put to 64 byte boundary
     tblrd*-           ;back 1
-f_writx lfsr  FSR2,Flash_buf    ;ready for rewrite
+
+f_writx 
+    lfsr  FSR2,Flash_buf    ;ready for rewrite
     movlw 8
     movwf Flcount
-f_wr1 movlw 8
+
+f_wr1 
+    movlw 8
     movwf Flcount1
 
-
-f_wr2 movf  POSTINC2,W
+f_wr2 
+    movf  POSTINC2,W
     movwf TABLAT
     tblwt+*
     decfsz  Flcount1
     bra   f_wr2
+
     bsf   EECON1,EEPGD    ;set up for write back
     bcf   EECON1,CFGS
     bcf   EECON1,FREE
@@ -2671,20 +2896,24 @@ f_wr2 movf  POSTINC2,W
 
     clrf  INTCON
 
-
     movlw 0x55
     movwf EECON2
     movlw 0xAA
     movwf EECON2
     bsf   EECON1,WR     ;write back
-wr_done btfsc EECON1,WR     ;write done?
+wr_done 
+    btfsc EECON1,WR     ;write done?
     bra   wr_done
 
     decfsz  Flcount
     bra   f_wr1       ;next block of 8
+
     movlw B'11000000'
     movwf INTCON        ;reenable interrupts
+
     return
+
+
 
 ;**************************************************************
 ; fills flash buffer on first time only - or on full reset
@@ -2700,19 +2929,23 @@ clear_events
     movwf TBLPTRH
     clrf  TBLPTRL
     tblrd*-
-c_buf call  event_erase   ;erase 64 bytes (16 entries)
+
+c_buf 
+    call  event_erase   ;erase 64 bytes (16 entries)
     dcfsnz  Count
     bra   fb0       ;all done
+
     movlw 64       ;next block to erase
     bcf   STATUS,C
     addwf ENtempl
     bnc   c_buf
+
     incf  ENtemph
     bra   c_buf
 
 ;Flash buffer is now erased; fill all 256 entries with default events
-
-fb0   clrf  Count1      ;button number
+fb0   
+    clrf  Count1      ;button number
     incf  Count1      ;button numbers start at 1
     movlw 16       ;16 pages of 64 bytes (16 entries) to do
     movwf Count2
@@ -2722,30 +2955,39 @@ fb0   clrf  Count1      ;button number
     clrf  TBLPTRL
     tblrd*-
 
-fb1   lfsr  FSR2,Flash_buf
+fb1   
+    lfsr  FSR2,Flash_buf
     movlw 16
     movwf Count
+
 fb2
 #if J5_SHORT          ;Default to short events if FLiM mode and J5 in upper posn
     btfss FLiM_MODE     ;Skip if FLiM?
     bra   fb2a      ;If SLiM
+
     btfss MODE_INP  ;Check J5
     bra   fb2a      ;Use defaults
+
     clrf  POSTINC2    ;Zero; use short event
     clrf  POSTINC2
     bra   fb2b
+
 fb2a
 #endif
     movff NN_temph,POSTINC2
     movff NN_templ,POSTINC2
-fb2b  clrf  POSTINC2
+
+fb2b  
+    clrf  POSTINC2
     movff Count1,POSTINC2
     incf  Count1
     decfsz  Count
     bra   fb2
+
     call  f_writx     ;write block of 64
     decfsz  Count2      ;last block?
     bra   fb1
+
     nop
     movlw LOW Node_st   ;reset loaded status
     movwf EEADR
@@ -2755,11 +2997,11 @@ fb2b  clrf  POSTINC2
     goto  lock_save
 
 
+
 ;****************************************************************
 ;   gets event from FLASH table
 ;   Uses index (0..255)
 ;   Result in Tx1 buffer
-
 get_event
     movf  Index,W   ;Get index for table
     call  set_tblptr  ;Setup table pointers
@@ -2775,16 +3017,15 @@ get_event
     tblrd*+
     movf  TABLAT,W
     movwf Tx1d4
-#if 0   ; why?
-    nop
-#endif
+
     return
+
+
 
 ;***************************************************************
 ;Set TBLPTR to Event_Table index in W (0..255)
 ;Assumes Event_Table is aligned on a 256 byte boundary
 ;TBLPTR = 00000000 001000hg fedcba00 where W = hgfedcba
-
 set_tblptr
     clrf  TBLPTRU   ;Clear upper byte
     clrf  TBLPTRH   ;Clear high byte
@@ -2796,12 +3037,15 @@ set_tblptr
     rlcf  TBLPTRH,F ;Shift carry into high byte
     movlw high Event_Table;Get start of table
     addwf TBLPTRH   ;Add to high pointer
+
     return
+
+
 
 ;***************************************************************
 ;     read an event back by index no.
-
-read  movff Rx0d3,Index
+read  
+    movff Rx0d3,Index
     decf  Index,F     ;index sent as base 1
     call  get_event
     movlw OPC_ENRSP
@@ -2815,40 +3059,45 @@ read  movff Rx0d3,Index
     movff NN_temph,Tx1d1
     movlw 8
     movwf Dlc
-    call  TX_data
-    return
+    goto  TX_data
+
+
 
 ;****************************************************************
 
 ; write acknowledge CAN frame for FLASH write timing
-
-wrack movlw OPC_WRACK   ;set up WRACK frame
+wrack 
+    movlw OPC_WRACK   ;set up WRACK frame
     movwf Tx1d0
     movff NN_temph,Tx1d1
     movff NN_templ,Tx1d2
     movlw 3
     movwf Dlc
-    call  TX_data
-    return
+    goto  TX_data
+
+
 
 ;************************************************************************
 ;Set/Clear lockout flag (stored in eeprom)
-
 lock_save
     movlw LOW NVlock      ;get pointer in EEPROM
     movwf EEADR
     movf  Lockout,W
     goto  eesave        ;write new value if changed
 
+
+
 ;************************************************************************
 ;Update lockout flag in ram from eeprom
-
 lock_load
     movlw LOW NVlock
     movwf EEADR
     call  eeread
     movwf Lockout
+
     return
+
+
 
 ;************************************************************************
 ;Event lookup table in FLASH
@@ -2856,7 +3105,6 @@ lock_load
 ;Entries 0..127 are used for each of the 128 switches
 ;Entries 128..255 are used for any special events
 ;Total size is 256 x 4 = 1024 bytes
-
   ORG 0x002000
 Event_Table
   ;Don't reserve any space here though as it'll overwrite
